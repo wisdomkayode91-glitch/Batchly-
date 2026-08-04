@@ -10,5 +10,5 @@
 // is public, visible to anyone who views your website's source.
 // ============================================================
 
-const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL_HERE";
-const SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+const SUPABASE_URL = "https://dguneglfuhdolshnpxkr.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kheKczlOOaN-1VKf4QG-1g_ioJMXBSo";
