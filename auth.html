@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="supabase-config.js" defer></script>
 <style>
   :root{
     --bg:#FBFAF6; --surface:#F3F1EA; --surface-2:#E8E4D8; --border:#DCD7C8;
@@ -229,9 +229,11 @@
   });
 
   // ---------- Supabase client ----------
-  // Session lives in sessionStorage, not localStorage — closing the
-  // browser fully logs the pharmacist out. Matches the blueprint's
-  // security rule for a shared counter computer.
+  // Wrapped in DOMContentLoaded so it waits for the deferred Supabase
+  // script above to finish loading — the tabs, theme toggle, and
+  // password checks above this line never wait on it, so they always
+  // work instantly even on a slow connection.
+  document.addEventListener('DOMContentLoaded', () => {
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: true, storage: window.sessionStorage }
   });
@@ -309,6 +311,7 @@
     showMsg(msg, 'Account created. Check your email to confirm, then log in.', 'success');
     btn.disabled = false; btn.textContent = 'Create account';
   });
+  }); // end DOMContentLoaded
 </script>
 
 </body>
