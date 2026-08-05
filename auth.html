@@ -67,6 +67,18 @@
   }
   input:focus{outline:2px solid var(--brand); outline-offset:1px;}
 
+  .pw-wrap{position:relative;}
+  .pw-wrap input{padding-right:42px;}
+  .pw-eye{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    width:30px; height:30px; border:none; background:transparent; cursor:pointer;
+    color:var(--text-dim); display:flex; align-items:center; justify-content:center;
+  }
+  .pw-eye svg{width:18px; height:18px;}
+  .pw-hint{font-size:0.78rem; color:var(--text-dim); margin-top:5px;}
+  .pw-hint.ok{color:var(--positive);}
+  .pw-hint.bad{color:var(--critical);}
+
   .btn{
     width:100%; margin-top:24px; padding:12px 0; border-radius:10px; border:none;
     background:var(--brand); color:#fff; font-weight:600; font-size:0.96rem; cursor:pointer;
@@ -114,7 +126,10 @@
         <label for="loginEmail">Email</label>
         <input type="email" id="loginEmail" required autocomplete="email">
         <label for="loginPassword">Password</label>
-        <input type="password" id="loginPassword" required autocomplete="current-password">
+        <div class="pw-wrap">
+          <input type="password" id="loginPassword" required autocomplete="current-password">
+          <button type="button" class="pw-eye" data-toggle="loginPassword" aria-label="Show password">👁️</button>
+        </div>
         <button class="btn" type="submit" id="loginBtn">Log in</button>
       </form>
       <div class="msg" id="loginMsg"></div>
@@ -130,7 +145,19 @@
         <label for="signupEmail">Email</label>
         <input type="email" id="signupEmail" required autocomplete="email">
         <label for="signupPassword">Password</label>
-        <input type="password" id="signupPassword" required minlength="6" autocomplete="new-password">
+        <div class="pw-wrap">
+          <input type="password" id="signupPassword" required minlength="8" autocomplete="new-password">
+          <button type="button" class="pw-eye" data-toggle="signupPassword" aria-label="Show password">👁️</button>
+        </div>
+        <div class="pw-hint" id="pwHint">At least 8 characters, with one capital letter, one lowercase letter, one number, and one special character ($ # & etc).</div>
+
+        <label for="signupPasswordConfirm">Confirm password</label>
+        <div class="pw-wrap">
+          <input type="password" id="signupPasswordConfirm" required minlength="8" autocomplete="new-password">
+          <button type="button" class="pw-eye" data-toggle="signupPasswordConfirm" aria-label="Show password">👁️</button>
+        </div>
+        <div class="pw-hint" id="pwMatchHint"></div>
+
         <button class="btn" type="submit" id="signupBtn">Create account</button>
       </form>
       <div class="msg" id="signupMsg"></div>
@@ -168,6 +195,38 @@
     panelSignup.classList.add('active'); panelLogin.classList.remove('active');
   });
   if(location.hash === '#signup'){ tabSignup.click(); }
+
+  // ---------- Password show/hide ----------
+  document.querySelectorAll('.pw-eye').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.toggle);
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? '👁️' : '👀';
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  });
+
+  // ---------- Password strength + match checking ----------
+  // At least 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character.
+  const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+  const signupPassword = document.getElementById('signupPassword');
+  const signupPasswordConfirm = document.getElementById('signupPasswordConfirm');
+  const pwHint = document.getElementById('pwHint');
+  const pwMatchHint = document.getElementById('pwMatchHint');
+
+  function passwordIsStrong(){ return strongPasswordRegex.test(signupPassword.value); }
+  function passwordsMatch(){ return signupPassword.value.length > 0 && signupPassword.value === signupPasswordConfirm.value; }
+
+  signupPassword.addEventListener('input', () => {
+    if (signupPassword.value.length === 0) { pwHint.className = 'pw-hint'; }
+    else { pwHint.className = 'pw-hint ' + (passwordIsStrong() ? 'ok' : 'bad'); }
+  });
+  signupPasswordConfirm.addEventListener('input', () => {
+    if (signupPasswordConfirm.value.length === 0) { pwMatchHint.textContent = ''; pwMatchHint.className = 'pw-hint'; return; }
+    pwMatchHint.textContent = passwordsMatch() ? 'Passwords match.' : 'Passwords do not match.';
+    pwMatchHint.className = 'pw-hint ' + (passwordsMatch() ? 'ok' : 'bad');
+  });
 
   // ---------- Supabase client ----------
   // Session lives in sessionStorage, not localStorage — closing the
@@ -214,6 +273,17 @@
     const email = document.getElementById('signupEmail').value.trim();
     const password = document.getElementById('signupPassword').value;
 
+    if (!passwordIsStrong()) {
+      showMsg(msg, 'Password needs at least 8 characters, one capital letter, one lowercase letter, one number, and one special character.', 'error');
+      btn.disabled = false; btn.textContent = 'Create account';
+      return;
+    }
+    if (!passwordsMatch()) {
+      showMsg(msg, 'Passwords do not match.', 'error');
+      btn.disabled = false; btn.textContent = 'Create account';
+      return;
+    }
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
     if (signUpError) {
@@ -242,5 +312,4 @@
 </script>
 
 </body>
-  </html>
-  
+</html>
