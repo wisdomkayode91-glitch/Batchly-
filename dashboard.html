@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="supabase-config.js" defer></script>
 <style>
   :root{
     --bg:#FBFAF6; --surface:#F3F1EA; --surface-2:#E8E4D8; --border:#DCD7C8;
@@ -235,13 +235,9 @@
 </div>
 
 <script>
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: true, storage: window.sessionStorage }
-  });
-
-  let pharmacyId = null;
-
   // ---------- Theme ----------
+  // Runs immediately — never waits on Supabase, so it always works
+  // even on a slow connection.
   const root = document.documentElement;
   const themeToggle = document.getElementById('themeToggle');
   const iconSun = document.getElementById('iconSun');
@@ -253,6 +249,15 @@
   }
   applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   themeToggle.addEventListener('click', () => applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+  // ---------- Everything below depends on Supabase ----------
+  // Wrapped so it waits for the deferred script above to actually finish loading.
+  document.addEventListener('DOMContentLoaded', () => {
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, storage: window.sessionStorage }
+  });
+
+  let pharmacyId = null;
 
   // ---------- Auth guard ----------
   async function init(){
@@ -412,12 +417,4 @@
     }
 
     const { error: saleError } = await supabase.from('sales').insert({
-      pharmacy_id: pharmacyId, item_id: itemId, batch_id: batch.id,
-      quantity: qty, unit_price: price, was_expired_override: isExpired
-    });
-    if (saleError) {
-      msg.textContent = saleError.message; msg.className = 'modal-msg error';
-      btn.disabled = false; btn.textContent = 'Record sale'; return;
-    }
-
-   
+      pharm
