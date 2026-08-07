@@ -186,28 +186,19 @@
 
   <section class="panel">
     <h2>Current stock</h2>
-    <table id="stockTable">
-      <thead><tr><th>Item</th><th>Units left</th><th>Nearest expiry</th><th>NAFDAC</th></tr></thead>
-      <tbody id="stockBody"></tbody>
-    </table>
+    <div id="stockBody"></div>
     <div class="empty" id="stockEmpty" style="display:none;">No stock yet — record your first purchase to get started.</div>
   </section>
 
   <section class="panel">
     <h2>Recent sales</h2>
-    <table>
-      <thead><tr><th>Item</th><th>Qty</th><th>Total</th><th>Date</th><th></th></tr></thead>
-      <tbody id="salesBody"></tbody>
-    </table>
+    <div id="salesBody"></div>
     <div class="empty" id="salesEmpty" style="display:none;">No sales recorded yet.</div>
   </section>
 
   <section class="panel">
     <h2>Recent purchases</h2>
-    <table>
-      <thead><tr><th>Item</th><th>Units</th><th>Cost</th><th>Expiry</th><th></th></tr></thead>
-      <tbody id="purchasesBody"></tbody>
-    </table>
+    <div id="purchasesBody"></div>
     <div class="empty" id="purchasesEmpty" style="display:none;">No purchases recorded yet.</div>
   </section>
 
@@ -764,7 +755,8 @@
       if (daysLeft < 0) { pill = 'status-critical'; label = 'Expired'; alerts.push({level:'critical', text: `<b>${name}</b> has an expired batch still in stock — selling it is blocked until a manager override.`}); }
       else if (daysLeft <= 90) { pill = 'status-caution'; label = daysLeft + ' days left'; alerts.push({level:'caution', text: `<b>${name}</b> expires in ${daysLeft} days — consider a promotion or moving it to the front shelf.`}); }
 
-      const tr = document.createElement('tr');
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
       let nafdacCell;
       if (info.nafdacFlagged) {
         nafdacCell = `<span class="status-pill status-critical mono">⚠ Suspected fake</span>`;
@@ -776,8 +768,13 @@
       } else {
         nafdacCell = `<span style="color:var(--text-dim); font-size:0.82rem;">No # on file</span>`;
       }
-      tr.innerHTML = `<td>${name}</td><td>${info.units}</td><td><span class="status-pill ${pill} mono">${label}</span></td><td>${nafdacCell}</td>`;
-      stockBody.appendChild(tr);
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:6px;">${name}</div>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:0.88rem; color:var(--text-dim);">
+          <span>${info.units} units left</span>
+          <span class="status-pill ${pill} mono">${label}</span>
+          ${nafdacCell}
+        </div>`;
+      stockBody.appendChild(row);
     });
 
     alerts.forEach(a => {
@@ -878,7 +875,8 @@
     salesEmpty.style.display = 'none';
 
     sales.forEach(s => {
-      const tr = document.createElement('tr');
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
       const total = (s.quantity * s.unit_price).toLocaleString();
       const date = new Date(s.sale_date).toLocaleDateString();
       // Matches the database rule exactly: only the person who recorded
@@ -889,12 +887,13 @@
         ? `<button class="btn-text sale-edit" data-id="${s.id}" data-qty="${s.quantity}" data-price="${s.unit_price}" style="font-size:0.78rem;">Edit</button>
            <button class="btn-text sale-delete" data-id="${s.id}" data-qty="${s.quantity}" data-batch="${s.batch_id}" style="font-size:0.78rem; color:var(--critical);">Delete</button>`
         : '';
-      tr.innerHTML = `<td>${s.items?.name || '—'}</td><td>${s.quantity}</td><td>₦${total}</td><td class="mono">${date}</td>
-        <td style="white-space:nowrap;">
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:4px;">${s.items?.name || '—'}</div>
+        <div style="color:var(--text-dim); font-size:0.88rem; margin-bottom:8px;">${s.quantity} units · ₦${total} · <span class="mono">${date}</span></div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
           ${actions}
           <button class="btn-text sale-history" data-id="${s.id}" style="font-size:0.78rem;">History</button>
-        </td>`;
-      salesBody.appendChild(tr);
+        </div>`;
+      salesBody.appendChild(row);
     });
   }
 
@@ -993,18 +992,20 @@
     empty.style.display = 'none';
 
     batches.forEach(b => {
-      const tr = document.createElement('tr');
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
       const canEdit = currentRole === 'owner' || b.recorded_by === currentUserId;
       const actions = canEdit
         ? `<button class="btn-text batch-edit" data-id="${b.id}" data-units="${b.sellable_units}" data-cost="${b.cost_price}" data-expiry="${b.expiry_date}" style="font-size:0.78rem;">Edit</button>
            <button class="btn-text batch-delete" data-id="${b.id}" style="font-size:0.78rem; color:var(--critical);">Delete</button>`
         : '';
-      tr.innerHTML = `<td>${b.items?.name || '—'}</td><td>${b.sellable_units}</td><td>₦${Number(b.cost_price).toLocaleString()}</td><td class="mono">${new Date(b.expiry_date).toLocaleDateString()}</td>
-        <td style="white-space:nowrap;">
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:4px;">${b.items?.name || '—'}</div>
+        <div style="color:var(--text-dim); font-size:0.88rem; margin-bottom:8px;">${b.sellable_units} units · ₦${Number(b.cost_price).toLocaleString()} · expires <span class="mono">${new Date(b.expiry_date).toLocaleDateString()}</span></div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
           ${actions}
           <button class="btn-text batch-history" data-id="${b.id}" style="font-size:0.78rem;">History</button>
-        </td>`;
-      body.appendChild(tr);
+        </div>`;
+      body.appendChild(row);
     });
   }
 
