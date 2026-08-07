@@ -187,7 +187,7 @@
   <section class="panel">
     <h2>Current stock</h2>
     <table id="stockTable">
-      <thead><tr><th>Item</th><th>Units left</th><th>Nearest expiry</th></tr></thead>
+      <thead><tr><th>Item</th><th>Units left</th><th>Nearest expiry</th><th>NAFDAC</th></tr></thead>
       <tbody id="stockBody"></tbody>
     </table>
     <div class="empty" id="stockEmpty" style="display:none;">No stock yet — record your first purchase to get started.</div>
@@ -196,10 +196,19 @@
   <section class="panel">
     <h2>Recent sales</h2>
     <table>
-      <thead><tr><th>Item</th><th>Qty</th><th>Total</th><th>Date</th></tr></thead>
+      <thead><tr><th>Item</th><th>Qty</th><th>Total</th><th>Date</th><th></th></tr></thead>
       <tbody id="salesBody"></tbody>
     </table>
     <div class="empty" id="salesEmpty" style="display:none;">No sales recorded yet.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Recent purchases</h2>
+    <table>
+      <thead><tr><th>Item</th><th>Units</th><th>Cost</th><th>Expiry</th><th></th></tr></thead>
+      <tbody id="purchasesBody"></tbody>
+    </table>
+    <div class="empty" id="purchasesEmpty" style="display:none;">No purchases recorded yet.</div>
   </section>
 
   <section class="panel">
@@ -216,16 +225,39 @@
     <div class="empty" id="customerEmpty" style="display:none;">No customers saved yet.</div>
   </section>
 
+  <section class="panel">
+    <h2>Compliance calendar</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">PCN, NAFDAC, and other license renewals — tracked so nothing lapses quietly.</p>
+    <button class="btn-text" id="openCompliance" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-bottom:16px;">+ Add a renewal date</button>
+    <div id="complianceList"></div>
+    <div class="empty" id="complianceEmpty" style="display:none;">No renewal dates saved yet.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Suppliers</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Trust builds from what you've actually checked — not a guess.</p>
+    <div id="supplierList"></div>
+    <div class="empty" id="supplierEmpty" style="display:none;">No suppliers saved yet — they're added automatically when you record a purchase.</div>
+  </section>
+
   <section class="panel" id="staffSection">
     <h2>Staff</h2>
     <div id="inviteCodeBlock" style="display:none;">
       <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Share this code with anyone joining your team — they'll enter it when they sign up, no need to share your own login.</p>
-      <div style="display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:18px;">
+      <div style="display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:6px;">
         <span class="mono" id="inviteCodeDisplay" style="font-size:1.1rem; font-weight:600; letter-spacing:0.05em; flex:1;">—</span>
         <button class="btn-text" id="copyInviteCode" style="padding:8px 14px; border-radius:8px; font-size:0.85rem; border:1px solid var(--border);">Copy</button>
       </div>
+      <p style="margin-bottom:18px;"><a href="#" id="regenerateCode" style="font-size:0.8rem; color:var(--text-dim);">Code shared with the wrong person? Generate a new one</a></p>
     </div>
     <div id="staffList"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Your data</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:16px;">This is genuinely yours. Download everything, any time, in a format you can open in Excel — no need to ask, no waiting on us.</p>
+    <button class="btn-text" id="exportData" style="border:1px solid var(--border); border-radius:8px; padding:10px 16px; font-size:0.85rem;">Download all my data (CSV)</button>
+    <p id="exportStatus" style="color:var(--text-dim); font-size:0.82rem; margin-top:10px;"></p>
   </section>
 </main>
 
@@ -274,6 +306,8 @@
       <input type="number" id="purchaseCost" min="0" step="0.01" required>
       <label for="purchaseExpiry">Expiry date</label>
       <input type="date" id="purchaseExpiry" required>
+      <label for="purchaseNafdac">NAFDAC number on the pack (optional)</label>
+      <input type="text" id="purchaseNafdac" placeholder="e.g. 04-1234">
       <div class="modal-actions">
         <button type="button" class="btn btn-cancel" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary" id="purchaseSubmitBtn">Record purchase</button>
@@ -328,6 +362,100 @@
   </div>
 </div>
 
+<!-- COMPLIANCE MODAL -->
+<div class="overlay" id="complianceOverlay">
+  <div class="modal">
+    <h2>Add a renewal date</h2>
+    <form id="complianceForm">
+      <label for="licenseType">License / renewal type</label>
+      <input type="text" id="licenseType" required list="licenseTypes" placeholder="e.g. PCN Practice License">
+      <datalist id="licenseTypes">
+        <option value="PCN Practice License">
+        <option value="PCN Premises License">
+        <option value="NAFDAC Retail Pharmacy License">
+        <option value="State Ministry of Health Permit">
+        <option value="Poison License">
+        <option value="Fire Safety Certificate">
+      </datalist>
+      <label for="renewalDate">Renewal date</label>
+      <input type="date" id="renewalDate" required>
+      <label for="complianceNotes">Notes (optional)</label>
+      <input type="text" id="complianceNotes" placeholder="e.g. Contact person, amount, reference number">
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="complianceSubmitBtn">Save</button>
+      </div>
+      <div class="modal-msg" id="complianceMsg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- EDIT SALE MODAL -->
+<div class="overlay" id="editSaleOverlay">
+  <div class="modal">
+    <h2>Edit sale</h2>
+    <form id="editSaleForm">
+      <input type="hidden" id="editSaleId">
+      <label for="editSaleQty">Quantity</label>
+      <input type="number" id="editSaleQty" min="1" required>
+      <label for="editSalePrice">Price per unit (₦)</label>
+      <input type="number" id="editSalePrice" min="0" step="0.01" required>
+      <label for="editSaleReason">Reason for this change</label>
+      <input type="text" id="editSaleReason" required placeholder="e.g. Typed the wrong quantity">
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="editSaleBtn">Save change</button>
+      </div>
+      <div class="modal-msg" id="editSaleMsg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- SALE HISTORY MODAL -->
+<div class="overlay" id="saleHistoryOverlay">
+  <div class="modal">
+    <h2>Sale history</h2>
+    <div id="saleHistoryList" style="max-height:50vh; overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-cancel" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PURCHASE MODAL -->
+<div class="overlay" id="editBatchOverlay">
+  <div class="modal">
+    <h2>Edit purchase</h2>
+    <form id="editBatchForm">
+      <input type="hidden" id="editBatchId">
+      <label for="editBatchUnits">Sellable units</label>
+      <input type="number" id="editBatchUnits" min="0" required>
+      <label for="editBatchCost">Cost price (₦)</label>
+      <input type="number" id="editBatchCost" min="0" step="0.01" required>
+      <label for="editBatchExpiry">Expiry date</label>
+      <input type="date" id="editBatchExpiry" required>
+      <label for="editBatchReason">Reason for this change</label>
+      <input type="text" id="editBatchReason" required placeholder="e.g. Typed the wrong cost price">
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="editBatchBtn">Save change</button>
+      </div>
+      <div class="modal-msg" id="editBatchMsg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- PURCHASE HISTORY MODAL -->
+<div class="overlay" id="batchHistoryOverlay">
+  <div class="modal">
+    <h2>Purchase history</h2>
+    <div id="batchHistoryList" style="max-height:50vh; overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-cancel" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ---------- Theme ----------
   // Runs immediately — never waits on Supabase, so it always works
@@ -379,12 +507,19 @@
     if (!session) { window.location.href = 'auth.html'; return; }
 
     let { data: pharmacy } = await supabase.from('pharmacies').select('*').maybeSingle();
+    const meta = session.user.user_metadata || {};
 
     // First time this user has ever had a real, confirmed session —
     // this is the earliest safe point to create (or join) a pharmacy,
     // now that Supabase's security rules actually allow it.
-    if (!pharmacy) {
-      const meta = session.user.user_metadata || {};
+    //
+    // Critical: this only ever runs ONCE per account, guarded by
+    // pharmacy_setup_done below. Without that guard, a staff member
+    // who's later removed from the team would just auto-rejoin the
+    // next time they log in, using their old signup metadata and
+    // invite code — silently undoing the removal. Once this has run
+    // successfully, "no pharmacy found" means "removed," not "new."
+    if (!pharmacy && !meta.pharmacy_setup_done) {
       const displayName = meta.display_name || (session.user.email || '').split('@')[0];
       let newPharmacyId = null;
       let rpcError = null;
@@ -404,8 +539,25 @@
         window.location.href = 'auth.html'; return;
       }
 
+      await supabase.auth.updateUser({ data: { pharmacy_setup_done: true } });
       const { data: fetched } = await supabase.from('pharmacies').select('*').eq('id', newPharmacyId).single();
       pharmacy = fetched;
+    }
+
+    if (!pharmacy) {
+      // Setup already happened once, but no pharmacy found now — this
+      // account was removed from its team. Show that plainly instead
+      // of silently recreating access they were meant to lose.
+      document.body.innerHTML = `<div style="max-width:420px; margin:15vh auto; padding:32px; text-align:center; font-family:'Inter',sans-serif;">
+        <h2 style="font-family:'Fraunces',serif; margin-bottom:12px;">You're no longer part of a pharmacy team</h2>
+        <p style="color:var(--text-dim); margin-bottom:20px;">Ask the pharmacy owner for a fresh invite code to rejoin, or set up your own pharmacy with a new account.</p>
+        <button id="orphanLogout" style="background:var(--brand); color:#fff; border:none; border-radius:10px; padding:12px 24px; font-weight:600; cursor:pointer;">Log out</button>
+      </div>`;
+      document.getElementById('orphanLogout').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = 'auth.html';
+      });
+      return;
     }
 
     pharmacyId = pharmacy.id;
@@ -416,7 +568,7 @@
       .from('pharmacy_staff').select('role').eq('pharmacy_id', pharmacyId).eq('user_id', session.user.id).maybeSingle();
     currentRole = myMembership?.role || 'staff';
 
-    await loadStock().then(byItem => Promise.all([loadSales(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers()]));
+    await loadStock().then(byItem => Promise.all([loadSales(), loadPurchases(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers(), loadSuppliers(), loadCompliance()]));
   }
 
   // ---------- Staff ----------
@@ -438,14 +590,84 @@
     (staff || []).forEach(member => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);';
-      row.innerHTML = `<span>${member.display_name}</span><span class="status-pill status-ok mono" style="text-transform:capitalize;">${member.role}</span>`;
+      const canRemove = currentRole === 'owner' && member.role !== 'owner';
+      row.innerHTML = `<span>${member.display_name}</span>
+        <span style="display:flex; align-items:center; gap:10px;">
+          <span class="status-pill status-ok mono" style="text-transform:capitalize;">${member.role}</span>
+          ${canRemove ? `<button class="btn-text staff-remove" data-id="${member.id}" data-name="${member.display_name}" style="font-size:0.78rem; color:var(--critical);">Remove</button>` : ''}
+        </span>`;
       list.appendChild(row);
     });
   }
 
+  document.getElementById('staffList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.staff-remove');
+    if (!btn) return;
+    if (!confirm(`Remove ${btn.dataset.name} from your team? They'll immediately lose access to this pharmacy's data. They can only rejoin with a fresh invite code.`)) return;
+    const { error } = await supabase.from('pharmacy_staff').delete().eq('id', btn.dataset.id);
+    if (error) { alert(error.message); return; }
+    await loadStaff();
+  });
+
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await supabase.auth.signOut();
     window.location.href = 'auth.html';
+  });
+
+  // ---------- Export your data ----------
+  function toCsv(rows){
+    if (!rows || rows.length === 0) return '';
+    const headers = Object.keys(rows[0]);
+    const escape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = [headers.join(',')];
+    rows.forEach(r => lines.push(headers.map(h => escape(r[h])).join(',')));
+    return lines.join('\n');
+  }
+
+  function downloadCsv(filename, csvString){
+    if (!csvString) return;
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('exportData').addEventListener('click', async () => {
+    const btn = document.getElementById('exportData');
+    const status = document.getElementById('exportStatus');
+    btn.disabled = true; status.textContent = 'Gathering your records…';
+
+    const [sales, purchases, customers, debts] = await Promise.all([
+      supabase.from('sales').select('sale_date, quantity, unit_price, was_expired_override, items(name)').is('deleted_at', null).order('sale_date', { ascending: false }),
+      supabase.from('stock_batches').select('purchased_at, lot_number, sellable_units, units_remaining, cost_price, expiry_date, nafdac_number, nafdac_verified, items(name), suppliers(name)').is('deleted_at', null).order('purchased_at', { ascending: false }),
+      supabase.from('customers').select('name, phone').order('name'),
+      supabase.from('debts').select('direction, amount, description, settled, created_at, customers(name), suppliers(name)').order('created_at', { ascending: false })
+    ]);
+
+    const flatten = (rows, transform) => (rows.data || []).map(transform);
+
+    downloadCsv('batchly-sales.csv', toCsv(flatten(sales, r => ({
+      date: r.sale_date, item: r.items?.name || '', quantity: r.quantity, unit_price: r.unit_price, sold_as_expired_override: r.was_expired_override
+    }))));
+    downloadCsv('batchly-purchases.csv', toCsv(flatten(purchases, r => ({
+      date: r.purchased_at, item: r.items?.name || '', supplier: r.suppliers?.name || '', lot_number: r.lot_number || '',
+      sellable_units: r.sellable_units, units_remaining: r.units_remaining, cost_price: r.cost_price, expiry_date: r.expiry_date,
+      nafdac_number: r.nafdac_number || '', nafdac_verified: r.nafdac_verified
+    }))));
+    downloadCsv('batchly-customers.csv', toCsv(flatten(customers, r => ({ name: r.name, phone: r.phone || '' }))));
+    downloadCsv('batchly-debts.csv', toCsv(flatten(debts, r => ({
+      date: r.created_at, direction: r.direction, party: r.customers?.name || r.suppliers?.name || '',
+      amount: r.amount, description: r.description || '', settled: r.settled
+    }))));
+
+    status.textContent = 'Done — check your downloads folder for 4 files.';
+    btn.disabled = false;
   });
 
   document.getElementById('copyInviteCode').addEventListener('click', async (e) => {
@@ -460,12 +682,52 @@
     }
   });
 
+  document.getElementById('regenerateCode').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (currentRole !== 'owner') return;
+    if (!confirm('This replaces your current invite code. Anyone with the old code will no longer be able to join. Continue?')) return;
+    const newCode = Array.from({length: 6}, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+    const { error } = await supabase.from('pharmacies').update({ invite_code: newCode }).eq('id', pharmacyId);
+    if (error) { alert(error.message); return; }
+    document.getElementById('inviteCodeDisplay').textContent = newCode;
+  });
+
+  // ---------- NAFDAC guided verification ----------
+  // There's no public API to check a batch automatically — NAFDAC's real
+  // anti-counterfeit system (MAS) is SMS/scratch-code based, run through
+  // third-party providers. What's real and useful: opening the public
+  // Greenbook so the pharmacist can check the number themselves, then
+  // marking it verified once they've actually looked.
+  document.getElementById('stockBody').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.nafdac-check');
+    if (!btn) return;
+    const batchId = btn.dataset.batch;
+    const number = btn.dataset.number;
+    window.open('https://greenbook.nafdac.gov.ng/', '_blank');
+
+    const matched = confirm('Opened the NAFDAC Greenbook. Search for "' + number + '" there.\n\nPress OK if the product name, manufacturer, and details MATCHED.\nPress Cancel if it did NOT match, or you couldn\'t find it.');
+
+    if (matched) {
+      await supabase.rpc('set_nafdac_status', { p_batch_id: batchId, p_verified: true, p_flagged: false });
+    } else {
+      const reallyFlag = confirm("Mark this batch as a SUSPECTED FAKE? This immediately blocks it from being sold until you sort it out with your supplier.");
+      if (reallyFlag) {
+        await supabase.rpc('set_nafdac_status', { p_batch_id: batchId, p_verified: false, p_flagged: true });
+      } else {
+        return; // left unverified, no change — they can check again later
+      }
+    }
+    await loadStock();
+    await loadSuppliers();
+  });
+
   // ---------- Load stock + Guardian alerts ----------
   async function loadStock(){
     const { data: batches, error } = await supabase
       .from('stock_batches')
-      .select('id, item_id, units_remaining, expiry_date, items(name)')
+      .select('id, item_id, units_remaining, expiry_date, nafdac_number, nafdac_verified, nafdac_flagged, items(name)')
       .gt('units_remaining', 0)
+      .is('deleted_at', null)
       .order('expiry_date', { ascending: true });
 
     const stockBody = document.getElementById('stockBody');
@@ -484,7 +746,10 @@
     const byItem = {};
     for (const b of batches) {
       const name = b.items?.name || '(unknown item)';
-      if (!byItem[b.item_id]) byItem[b.item_id] = { name, units: 0, nearestExpiry: b.expiry_date };
+      if (!byItem[b.item_id]) byItem[b.item_id] = {
+        name, units: 0, nearestExpiry: b.expiry_date,
+        activeBatchId: b.id, nafdacNumber: b.nafdac_number, nafdacVerified: b.nafdac_verified, nafdacFlagged: b.nafdac_flagged
+      };
       byItem[b.item_id].units += b.units_remaining;
     }
 
@@ -500,7 +765,18 @@
       else if (daysLeft <= 90) { pill = 'status-caution'; label = daysLeft + ' days left'; alerts.push({level:'caution', text: `<b>${name}</b> expires in ${daysLeft} days — consider a promotion or moving it to the front shelf.`}); }
 
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${name}</td><td>${info.units}</td><td><span class="status-pill ${pill} mono">${label}</span></td>`;
+      let nafdacCell;
+      if (info.nafdacFlagged) {
+        nafdacCell = `<span class="status-pill status-critical mono">⚠ Suspected fake</span>`;
+        alerts.push({level:'critical', text: `<b>${name}</b>'s NAFDAC number didn't match the Greenbook — selling it is blocked. Quarantine this batch and contact your supplier.`});
+      } else if (info.nafdacVerified) {
+        nafdacCell = `<span class="status-pill status-ok mono">✓ Verified</span>`;
+      } else if (info.nafdacNumber) {
+        nafdacCell = `<button class="btn-text nafdac-check" data-batch="${info.activeBatchId}" data-number="${info.nafdacNumber}" style="font-size:0.8rem; border:1px solid var(--border); border-radius:6px; padding:5px 9px;">Check ${info.nafdacNumber}</button>`;
+      } else {
+        nafdacCell = `<span style="color:var(--text-dim); font-size:0.82rem;">No # on file</span>`;
+      }
+      tr.innerHTML = `<td>${name}</td><td>${info.units}</td><td><span class="status-pill ${pill} mono">${label}</span></td><td>${nafdacCell}</td>`;
       stockBody.appendChild(tr);
     });
 
@@ -589,7 +865,8 @@
   async function loadSales(){
     const { data: sales, error } = await supabase
       .from('sales')
-      .select('id, quantity, unit_price, sale_date, items(name)')
+      .select('id, quantity, unit_price, sale_date, batch_id, deleted_at, recorded_by, items(name)')
+      .is('deleted_at', null)
       .order('sale_date', { ascending: false })
       .limit(10);
 
@@ -604,10 +881,209 @@
       const tr = document.createElement('tr');
       const total = (s.quantity * s.unit_price).toLocaleString();
       const date = new Date(s.sale_date).toLocaleDateString();
-      tr.innerHTML = `<td>${s.items?.name || '—'}</td><td>${s.quantity}</td><td>₦${total}</td><td class="mono">${date}</td>`;
+      // Matches the database rule exactly: only the person who recorded
+      // this sale, or the owner, can change it — everyone can still see
+      // it and its full history.
+      const canEdit = currentRole === 'owner' || s.recorded_by === currentUserId;
+      const actions = canEdit
+        ? `<button class="btn-text sale-edit" data-id="${s.id}" data-qty="${s.quantity}" data-price="${s.unit_price}" style="font-size:0.78rem;">Edit</button>
+           <button class="btn-text sale-delete" data-id="${s.id}" data-qty="${s.quantity}" data-batch="${s.batch_id}" style="font-size:0.78rem; color:var(--critical);">Delete</button>`
+        : '';
+      tr.innerHTML = `<td>${s.items?.name || '—'}</td><td>${s.quantity}</td><td>₦${total}</td><td class="mono">${date}</td>
+        <td style="white-space:nowrap;">
+          ${actions}
+          <button class="btn-text sale-history" data-id="${s.id}" style="font-size:0.78rem;">History</button>
+        </td>`;
       salesBody.appendChild(tr);
     });
   }
+
+  // ---------- Edit a sale ----------
+  document.getElementById('salesBody').addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.sale-edit');
+    const deleteBtn = e.target.closest('.sale-delete');
+    const historyBtn = e.target.closest('.sale-history');
+
+    if (editBtn) {
+      document.getElementById('editSaleId').value = editBtn.dataset.id;
+      document.getElementById('editSaleQty').value = editBtn.dataset.qty;
+      document.getElementById('editSalePrice').value = editBtn.dataset.price;
+      document.getElementById('editSaleReason').value = '';
+      document.getElementById('editSaleMsg').className = 'modal-msg';
+      openModal('editSaleOverlay');
+    }
+
+    if (deleteBtn) {
+      const reason = prompt('This will put the sale in trash and restore its stock. What happened?');
+      if (!reason) return;
+      const saleId = deleteBtn.dataset.id;
+      const oldQty = parseInt(deleteBtn.dataset.qty);
+      const batchId = deleteBtn.dataset.batch;
+
+      await supabase.rpc('adjust_batch_units', { p_batch_id: batchId, p_delta: oldQty });
+
+      await supabase.from('sales').update({ deleted_at: new Date().toISOString() }).eq('id', saleId);
+      await supabase.from('sale_edits').insert({
+        sale_id: saleId, edited_by: currentUserId, change_type: 'delete',
+        old_quantity: oldQty, note: reason
+      });
+      await Promise.all([loadSales(), loadStock()]);
+    }
+
+    if (historyBtn) {
+      const { data: history } = await supabase.from('sale_edits').select('*').eq('sale_id', historyBtn.dataset.id).order('edited_at', { ascending: false });
+      const list = document.getElementById('saleHistoryList');
+      list.innerHTML = (history && history.length)
+        ? history.map(h => `<div style="padding:10px 0; border-bottom:1px solid var(--border); font-size:0.88rem;">
+            <div style="font-weight:600; text-transform:capitalize;">${h.change_type} — ${new Date(h.edited_at).toLocaleString()}</div>
+            ${h.old_quantity != null || h.new_quantity != null ? `<div style="color:var(--text-dim);">Qty: ${h.old_quantity ?? '—'} → ${h.new_quantity ?? '—'}${h.old_unit_price != null ? `, Price: ₦${h.old_unit_price} → ₦${h.new_unit_price ?? '—'}` : ''}</div>` : ''}
+            ${h.note ? `<div style="color:var(--text-dim); font-style:italic;">"${h.note}"</div>` : ''}
+          </div>`).join('')
+        : `<p style="color:var(--text-dim); padding:12px 0;">No changes recorded — this sale is exactly as first entered.</p>`;
+      openModal('saleHistoryOverlay');
+    }
+  });
+
+  document.getElementById('editSaleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('editSaleBtn');
+    const msg = document.getElementById('editSaleMsg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const saleId = document.getElementById('editSaleId').value;
+    const newQty = parseInt(document.getElementById('editSaleQty').value);
+    const newPrice = parseFloat(document.getElementById('editSalePrice').value);
+    const reason = document.getElementById('editSaleReason').value.trim();
+
+    const { data: sale } = await supabase.from('sales').select('quantity, unit_price, batch_id').eq('id', saleId).single();
+    const qtyDelta = sale.quantity - newQty; // positive = units go back to stock, negative = more units taken
+
+    const { error: adjustError } = await supabase.rpc('adjust_batch_units', { p_batch_id: sale.batch_id, p_delta: qtyDelta });
+    if (adjustError) {
+      msg.textContent = "That's more than the batch has left in stock."; msg.className = 'modal-msg error';
+      btn.disabled = false; btn.textContent = 'Save change'; return;
+    }
+
+    await supabase.from('sales').update({ quantity: newQty, unit_price: newPrice }).eq('id', saleId);
+    await supabase.from('sale_edits').insert({
+      sale_id: saleId, edited_by: currentUserId, change_type: 'edit',
+      old_quantity: sale.quantity, old_unit_price: sale.unit_price,
+      new_quantity: newQty, new_unit_price: newPrice, note: reason
+    });
+
+    msg.textContent = 'Updated.'; msg.className = 'modal-msg success';
+    await Promise.all([loadSales(), loadStock()]);
+    setTimeout(() => { closeModal('editSaleOverlay'); btn.disabled = false; btn.textContent = 'Save change'; }, 700);
+  });
+
+  // ---------- Recent purchases ----------
+  async function loadPurchases(){
+    const { data: batches, error } = await supabase
+      .from('stock_batches')
+      .select('id, sellable_units, cost_price, expiry_date, recorded_by, items(name)')
+      .is('deleted_at', null)
+      .order('purchased_at', { ascending: false })
+      .limit(10);
+
+    const body = document.getElementById('purchasesBody');
+    const empty = document.getElementById('purchasesEmpty');
+    body.innerHTML = '';
+
+    if (error || !batches || batches.length === 0) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+
+    batches.forEach(b => {
+      const tr = document.createElement('tr');
+      const canEdit = currentRole === 'owner' || b.recorded_by === currentUserId;
+      const actions = canEdit
+        ? `<button class="btn-text batch-edit" data-id="${b.id}" data-units="${b.sellable_units}" data-cost="${b.cost_price}" data-expiry="${b.expiry_date}" style="font-size:0.78rem;">Edit</button>
+           <button class="btn-text batch-delete" data-id="${b.id}" style="font-size:0.78rem; color:var(--critical);">Delete</button>`
+        : '';
+      tr.innerHTML = `<td>${b.items?.name || '—'}</td><td>${b.sellable_units}</td><td>₦${Number(b.cost_price).toLocaleString()}</td><td class="mono">${new Date(b.expiry_date).toLocaleDateString()}</td>
+        <td style="white-space:nowrap;">
+          ${actions}
+          <button class="btn-text batch-history" data-id="${b.id}" style="font-size:0.78rem;">History</button>
+        </td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  document.getElementById('purchasesBody').addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.batch-edit');
+    const deleteBtn = e.target.closest('.batch-delete');
+    const historyBtn = e.target.closest('.batch-history');
+
+    if (editBtn) {
+      document.getElementById('editBatchId').value = editBtn.dataset.id;
+      document.getElementById('editBatchUnits').value = editBtn.dataset.units;
+      document.getElementById('editBatchCost').value = editBtn.dataset.cost;
+      document.getElementById('editBatchExpiry').value = editBtn.dataset.expiry;
+      document.getElementById('editBatchReason').value = '';
+      document.getElementById('editBatchMsg').className = 'modal-msg';
+      openModal('editBatchOverlay');
+    }
+
+    if (deleteBtn) {
+      const reason = prompt('This removes the purchase from stock and puts it in trash. What happened?');
+      if (!reason) return;
+      const batchId = deleteBtn.dataset.id;
+      const { data: batch } = await supabase.from('stock_batches').select('sellable_units, cost_price, expiry_date').eq('id', batchId).single();
+
+      await supabase.from('stock_batches').update({ deleted_at: new Date().toISOString() }).eq('id', batchId);
+      await supabase.from('batch_edits').insert({
+        batch_id: batchId, edited_by: currentUserId, change_type: 'delete',
+        old_sellable_units: batch.sellable_units, old_cost_price: batch.cost_price, old_expiry_date: batch.expiry_date,
+        note: reason
+      });
+      await Promise.all([loadPurchases(), loadStock(), loadSuppliers()]);
+    }
+
+    if (historyBtn) {
+      const { data: history } = await supabase.from('batch_edits').select('*').eq('batch_id', historyBtn.dataset.id).order('edited_at', { ascending: false });
+      const list = document.getElementById('batchHistoryList');
+      list.innerHTML = (history && history.length)
+        ? history.map(h => `<div style="padding:10px 0; border-bottom:1px solid var(--border); font-size:0.88rem;">
+            <div style="font-weight:600; text-transform:capitalize;">${h.change_type} — ${new Date(h.edited_at).toLocaleString()}</div>
+            ${h.old_sellable_units != null || h.new_sellable_units != null ? `<div style="color:var(--text-dim);">Units: ${h.old_sellable_units ?? '—'} → ${h.new_sellable_units ?? '—'}, Cost: ₦${h.old_cost_price ?? '—'} → ₦${h.new_cost_price ?? '—'}</div>` : ''}
+            ${h.note ? `<div style="color:var(--text-dim); font-style:italic;">"${h.note}"</div>` : ''}
+          </div>`).join('')
+        : `<p style="color:var(--text-dim); padding:12px 0;">No changes recorded — this purchase is exactly as first entered.</p>`;
+      openModal('batchHistoryOverlay');
+    }
+  });
+
+  document.getElementById('editBatchForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('editBatchBtn');
+    const msg = document.getElementById('editBatchMsg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const batchId = document.getElementById('editBatchId').value;
+    const newUnits = parseInt(document.getElementById('editBatchUnits').value);
+    const newCost = parseFloat(document.getElementById('editBatchCost').value);
+    const newExpiry = document.getElementById('editBatchExpiry').value;
+    const reason = document.getElementById('editBatchReason').value.trim();
+
+    const { data: batch } = await supabase.from('stock_batches').select('sellable_units, cost_price, expiry_date').eq('id', batchId).single();
+    const unitsDelta = newUnits - batch.sellable_units;
+
+    const { error: adjustError } = await supabase.rpc('adjust_batch_units', { p_batch_id: batchId, p_delta: unitsDelta });
+    if (adjustError) {
+      msg.textContent = "That would take units already sold below zero — check what's actually left."; msg.className = 'modal-msg error';
+      btn.disabled = false; btn.textContent = 'Save change'; return;
+    }
+
+    await supabase.from('stock_batches').update({ sellable_units: newUnits, cost_price: newCost, expiry_date: newExpiry }).eq('id', batchId);
+    await supabase.from('batch_edits').insert({
+      batch_id: batchId, edited_by: currentUserId, change_type: 'edit',
+      old_sellable_units: batch.sellable_units, old_cost_price: batch.cost_price, old_expiry_date: batch.expiry_date,
+      new_sellable_units: newUnits, new_cost_price: newCost, new_expiry_date: newExpiry, note: reason
+    });
+
+    msg.textContent = 'Updated.'; msg.className = 'modal-msg success';
+    await Promise.all([loadPurchases(), loadStock()]);
+    setTimeout(() => { closeModal('editBatchOverlay'); btn.disabled = false; btn.textContent = 'Save change'; }, 700);
+  });
 
   // ---------- Modals ----------
   function openModal(id){ document.getElementById(id).classList.add('open'); }
@@ -643,15 +1119,25 @@
     // FEFO: earliest-expiring batch with stock, for this item
     const { data: batch, error: batchError } = await supabase
       .from('stock_batches')
-      .select('id, units_remaining, expiry_date')
+      .select('id, units_remaining, expiry_date, nafdac_flagged')
       .eq('item_id', itemId)
       .gt('units_remaining', 0)
+      .is('deleted_at', null)
       .order('expiry_date', { ascending: true })
       .limit(1)
       .maybeSingle();
 
     if (batchError || !batch) {
       msg.textContent = 'No stock available for this item.'; msg.className = 'modal-msg error';
+      btn.disabled = false; btn.textContent = 'Record sale'; return;
+    }
+
+    // Suspected-counterfeit is a hard block — unlike an expired batch,
+    // there's no manager override for this, since selling a batch that
+    // failed a NAFDAC check is a safety and legal risk, not a judgment call.
+    if (batch.nafdac_flagged) {
+      msg.textContent = 'This batch is flagged as a suspected fake and cannot be sold. Quarantine it and contact your supplier.';
+      msg.className = 'modal-msg error';
       btn.disabled = false; btn.textContent = 'Record sale'; return;
     }
 
@@ -682,7 +1168,7 @@
       btn.disabled = false; btn.textContent = 'Record sale'; return;
     }
 
-    await supabase.from('stock_batches').update({ units_remaining: batch.units_remaining - qty }).eq('id', batch.id);
+    await supabase.rpc('adjust_batch_units', { p_batch_id: batch.id, p_delta: -qty });
 
     msg.textContent = 'Sale recorded.'; msg.className = 'modal-msg success';
     await loadStock().then(byItem => Promise.all([loadSales(), loadBriefing(byItem)]));
@@ -709,6 +1195,7 @@
     const sellable = parseInt(document.getElementById('purchaseSellable').value, 10);
     const cost = parseFloat(document.getElementById('purchaseCost').value);
     const expiry = document.getElementById('purchaseExpiry').value;
+    const nafdacNumber = document.getElementById('purchaseNafdac').value.trim();
 
     // Find or create the item — normalized_name in the database already
     // prevents case/whitespace duplicates like "Paracetamol Type A" vs "paracetamol type a".
@@ -742,13 +1229,14 @@
     const { error: batchError } = await supabase.from('stock_batches').insert({
       pharmacy_id: pharmacyId, item_id: itemId, supplier_id: supplierId,
       lot_number: lot || null, quantity_purchased: qty, sellable_units: sellable,
-      units_remaining: sellable, cost_price: cost, expiry_date: expiry
+      units_remaining: sellable, cost_price: cost, expiry_date: expiry,
+      nafdac_number: nafdacNumber || null, recorded_by: currentUserId
     });
 
     if (batchError) { msg.textContent = batchError.message; msg.className = 'modal-msg error'; btn.disabled = false; btn.textContent = 'Record purchase'; return; }
 
     msg.textContent = 'Purchase recorded.'; msg.className = 'modal-msg success';
-    await loadStock();
+    await Promise.all([loadStock(), loadSuppliers(), loadPurchases()]);
     setTimeout(() => { closeModal('purchaseOverlay'); btn.disabled = false; btn.textContent = 'Record purchase'; }, 700);
   });
 
@@ -917,6 +1405,124 @@
       list.appendChild(row);
     });
     document.getElementById('customerEmpty').style.display = (customers || []).length === 0 ? 'block' : 'none';
+  }
+
+  // ---------- Compliance calendar ----------
+  document.getElementById('openCompliance').addEventListener('click', () => {
+    document.getElementById('complianceMsg').className = 'modal-msg';
+    document.getElementById('complianceForm').reset();
+    openModal('complianceOverlay');
+  });
+
+  document.getElementById('complianceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('complianceSubmitBtn');
+    const msg = document.getElementById('complianceMsg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const licenseType = document.getElementById('licenseType').value.trim();
+    const renewalDate = document.getElementById('renewalDate').value;
+    const notes = document.getElementById('complianceNotes').value.trim();
+
+    const { error } = await supabase.from('compliance_dates').insert({
+      pharmacy_id: pharmacyId, license_type: licenseType, renewal_date: renewalDate, notes: notes || null
+    });
+
+    if (error) { msg.textContent = error.message; msg.className = 'modal-msg error'; btn.disabled = false; btn.textContent = 'Save'; return; }
+
+    msg.textContent = 'Saved.'; msg.className = 'modal-msg success';
+    await loadCompliance();
+    setTimeout(() => { closeModal('complianceOverlay'); btn.disabled = false; btn.textContent = 'Save'; }, 700);
+  });
+
+  document.getElementById('complianceList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.renew-btn');
+    if (!btn) return;
+    const next = prompt('New renewal date (YYYY-MM-DD):');
+    if (!next) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) { alert('Please use the format YYYY-MM-DD.'); return; }
+    await supabase.from('compliance_dates').update({ renewal_date: next }).eq('id', btn.dataset.id);
+    await loadCompliance();
+  });
+
+  async function loadCompliance(){
+    const { data: dates } = await supabase.from('compliance_dates').select('*').eq('pharmacy_id', pharmacyId).order('renewal_date');
+    const list = document.getElementById('complianceList');
+    list.innerHTML = '';
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const alertsEl = document.getElementById('alerts');
+
+    (dates || []).forEach(d => {
+      const due = new Date(d.renewal_date);
+      const daysLeft = Math.round((due - today) / 86400000);
+      let pill, label;
+      if (daysLeft < 0) { pill = 'status-critical'; label = 'Overdue'; }
+      else if (daysLeft <= 45) { pill = 'status-caution'; label = daysLeft + ' days left'; }
+      else { pill = 'status-ok'; label = daysLeft + ' days left'; }
+
+      if (daysLeft < 0) {
+        const div = document.createElement('div');
+        div.className = 'alert critical';
+        div.innerHTML = `<b>${d.license_type}</b> is overdue for renewal — this needs attention now.`;
+        alertsEl.appendChild(div);
+      } else if (daysLeft <= 45) {
+        const div = document.createElement('div');
+        div.className = 'alert caution';
+        div.innerHTML = `<b>${d.license_type}</b> renews in ${daysLeft} days — start the paperwork this week to avoid a late fee.`;
+        alertsEl.appendChild(div);
+      }
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); gap:10px;';
+      row.innerHTML = `<div>
+          <div style="font-weight:600;">${d.license_type}</div>
+          <div style="color:var(--text-dim); font-size:0.85rem;">Renews ${due.toLocaleDateString()}${d.notes ? ' · ' + d.notes : ''}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="status-pill ${pill} mono">${label}</span>
+          <button class="btn-text renew-btn" data-id="${d.id}" style="font-size:0.8rem;">Renewed</button>
+        </div>`;
+      list.appendChild(row);
+    });
+    document.getElementById('complianceEmpty').style.display = (dates || []).length === 0 ? 'block' : 'none';
+  }
+
+  async function loadSuppliers(){
+    const { data: suppliers } = await supabase.from('suppliers').select('*').eq('pharmacy_id', pharmacyId).order('name');
+    const { data: batches } = await supabase.from('stock_batches')
+      .select('supplier_id, nafdac_number, nafdac_verified, nafdac_flagged').eq('pharmacy_id', pharmacyId);
+
+    const statsBySupplier = {};
+    (batches || []).forEach(b => {
+      if (!b.supplier_id) return;
+      const s = statsBySupplier[b.supplier_id] || (statsBySupplier[b.supplier_id] = { verified: 0, flagged: 0, unchecked: 0, total: 0 });
+      s.total++;
+      if (b.nafdac_flagged) s.flagged++;
+      else if (b.nafdac_verified) s.verified++;
+      else if (b.nafdac_number) s.unchecked++;
+    });
+
+    const list = document.getElementById('supplierList');
+    list.innerHTML = '';
+    (suppliers || []).forEach(sup => {
+      const s = statsBySupplier[sup.id];
+      let trustBadge;
+      if (!s || s.total === 0) {
+        trustBadge = `<span style="color:var(--text-dim); font-size:0.82rem;">No batches yet</span>`;
+      } else if (s.flagged > 0) {
+        trustBadge = `<span class="status-pill status-critical mono">⚠ ${s.flagged} failed check${s.flagged === 1 ? '' : 's'}</span>`;
+      } else if (s.verified > 0) {
+        trustBadge = `<span class="status-pill status-ok mono">✓ ${s.verified}/${s.total} verified clean</span>`;
+      } else {
+        trustBadge = `<span class="status-pill status-caution mono">${s.total} batch${s.total === 1 ? '' : 'es'}, none checked yet</span>`;
+      }
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);';
+      row.innerHTML = `<span style="font-weight:600;">${sup.name}</span>${trustBadge}`;
+      list.appendChild(row);
+    });
+    document.getElementById('supplierEmpty').style.display = (suppliers || []).length === 0 ? 'block' : 'none';
   }
 
   init();
