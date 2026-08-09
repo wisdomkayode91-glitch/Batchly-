@@ -137,8 +137,40 @@
           <button type="button" class="pw-eye" data-toggle="loginPassword" aria-label="Show password">👁️</button>
         </div>
         <button class="btn" type="submit" id="loginBtn">Log in</button>
+        <p style="text-align:center; margin-top:10px;">
+          <a href="#" id="forgotPasswordLink" style="font-size:0.85rem; color:var(--brand);">Forgot your password?</a>
+        </p>
       </form>
       <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div class="panel" id="panelForgot">
+      <h1>Reset your password</h1>
+      <p class="subtitle" id="forgotSubtitle">Enter your email and we'll send you a link to set a new password.</p>
+      <form id="formForgot">
+        <label for="forgotEmail">Email</label>
+        <input type="email" id="forgotEmail" required autocomplete="email">
+        <button class="btn" type="submit" id="forgotBtn">Send reset link</button>
+      </form>
+      <div class="msg" id="forgotMsg"></div>
+      <p style="text-align:center; margin-top:10px;"><a href="#" id="backToLogin" style="font-size:0.85rem; color:var(--brand);">Back to log in</a></p>
+    </div>
+
+    <!-- SET NEW PASSWORD (after tapping the reset link) -->
+    <div class="panel" id="panelNewPassword">
+      <h1>Choose a new password</h1>
+      <p class="subtitle">You're verified — set a new password to finish.</p>
+      <form id="formNewPassword">
+        <label for="newPassword">New password</label>
+        <div class="pw-wrap">
+          <input type="password" id="newPassword" required minlength="8" autocomplete="new-password">
+          <button type="button" class="pw-eye" data-toggle="newPassword" aria-label="Show password">👁️</button>
+        </div>
+        <div class="pw-hint" id="newPwHint">At least 8 characters, with one capital letter, one lowercase letter, one number, and one special character ($ # &amp; etc).</div>
+        <button class="btn" type="submit" id="newPasswordBtn">Save new password</button>
+      </form>
+      <div class="msg" id="newPasswordMsg"></div>
     </div>
 
     <!-- SIGN UP -->
@@ -229,14 +261,18 @@
   const panelLogin = document.getElementById('panelLogin');
   const panelSignup = document.getElementById('panelSignup');
   const panelVerify = document.getElementById('panelVerify');
+  const panelForgot = document.getElementById('panelForgot');
+  const panelNewPassword = document.getElementById('panelNewPassword');
   const tabsBar = document.querySelector('.tabs');
+  const allPanels = [panelLogin, panelSignup, panelVerify, panelForgot, panelNewPassword];
 
   function showPanel(target){
-    [panelLogin, panelSignup, panelVerify].forEach(p => p.classList.remove('active'));
+    allPanels.forEach(p => p.classList.remove('active'));
     target.classList.add('active');
-    // The verify screen isn't a "tab" — hide the Log in / Create account
-    // switcher while it's showing so it's clearly its own step.
-    tabsBar.style.display = (target === panelVerify) ? 'none' : 'flex';
+    // Only Log in / Create account count as real "tabs" — every other
+    // screen (verify, forgot, new password) is its own single-purpose
+    // step, so the tab switcher hides while they're showing.
+    tabsBar.style.display = (target === panelLogin || target === panelSignup) ? 'flex' : 'none';
   }
 
   tabLogin.addEventListener('click', () => {
@@ -299,8 +335,16 @@
   // what caused the flicker loop between here and the dashboard on a
   // shaky connection, since both pages were independently redirecting
   // based on a session check that could disagree with each other.
-  const cameFromEmailLink = /access_token|type=signup|type=recovery|type=email_change/.test(location.hash);
-  if (cameFromEmailLink) {
+  const isRecovery = /type=recovery/.test(location.hash);
+  const cameFromEmailLink = /access_token|type=signup|type=email_change/.test(location.hash) && !isRecovery;
+
+  if (isRecovery) {
+    // A password-reset link creates a temporary session just for this —
+    // show the "choose a new password" screen instead of the dashboard.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) showPanel(panelNewPassword);
+    });
+  } else if (cameFromEmailLink) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) window.location.href = 'dashboard.html';
     });
@@ -343,6 +387,62 @@
       showMsg(msg, 'Logged in. Taking you to your dashboard…', 'success');
       window.location.href = 'dashboard.html';
     }
+  });
+
+  // ---------- Forgot password ----------
+  document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('forgotMsg').className = 'msg';
+    document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value;
+    showPanel(panelForgot);
+  });
+  document.getElementById('backToLogin').addEventListener('click', (e) => {
+    e.preventDefault();
+    showPanel(panelLogin);
+  });
+
+  document.getElementById('formForgot').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('forgotBtn');
+    const msg = document.getElementById('forgotMsg');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const email = document.getElementById('forgotEmail').value.trim();
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: location.origin + location.pathname
+    });
+
+    if (error) { showMsg(msg, error.message, 'error'); }
+    else { showMsg(msg, "If that email has a Batchly account, a reset link is on its way. It'll bring you right back here to set a new password.", 'success'); }
+    btn.disabled = false; btn.textContent = 'Send reset link';
+  });
+
+  // ---------- Set new password (from a reset link) ----------
+  const newPassword = document.getElementById('newPassword');
+  const newPwHint = document.getElementById('newPwHint');
+  function newPasswordIsStrong(){ return strongPasswordRegex.test(newPassword.value); }
+  newPassword.addEventListener('input', () => {
+    if (newPassword.value.length === 0) { newPwHint.className = 'pw-hint'; }
+    else { newPwHint.className = 'pw-hint ' + (newPasswordIsStrong() ? 'ok' : 'bad'); }
+  });
+
+  document.getElementById('formNewPassword').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('newPasswordBtn');
+    const msg = document.getElementById('newPasswordMsg');
+
+    if (!newPasswordIsStrong()) {
+      showMsg(msg, 'Password needs at least 8 characters, one capital letter, one lowercase letter, one number, and one special character.', 'error');
+      return;
+    }
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const { error } = await supabase.auth.updateUser({ password: newPassword.value });
+
+    if (error) { showMsg(msg, error.message, 'error'); btn.disabled = false; btn.textContent = 'Save new password'; return; }
+
+    showMsg(msg, 'Password updated! Taking you to your dashboard…', 'success');
+    window.location.href = 'dashboard.html';
   });
 
   // ---------- Sign up ----------
