@@ -151,8 +151,6 @@
       </svg>
       Batchly
       <span class="pharmacy-name" id="pharmacyName">Loading…</span>
-      <select id="branchSwitcher" style="display:none; margin-left:10px; font-size:0.85rem; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);"></select>
-      <span id="branchLocked" class="status-pill status-ok mono" style="display:none; margin-left:10px;"></span>
     </div>
     <div class="nav-actions">
       <button class="icon-btn" id="themeToggle" aria-label="Toggle dark mode">
@@ -163,6 +161,14 @@
     </div>
   </div>
 </header>
+
+<div id="branchBar" style="display:none; background:var(--surface-2); border-bottom:1px solid var(--border); padding:12px 20px;">
+  <div style="max-width:900px; margin:0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <span style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Branch:</span>
+    <select id="branchSwitcher" style="display:none; flex:1; min-width:180px; font-size:0.9rem; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);"></select>
+    <span id="branchLocked" class="status-pill status-ok mono" style="display:none;"></span>
+  </div>
+</div>
 
 <main>
   <div id="briefing"></div>
@@ -243,14 +249,7 @@
 
   <section class="panel" id="staffSection">
     <h2>Staff</h2>
-    <div id="inviteCodeBlock" style="display:none;">
-      <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Share this code with anyone joining your team — they'll enter it when they sign up, no need to share your own login.</p>
-      <div style="display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:6px;">
-        <span class="mono" id="inviteCodeDisplay" style="font-size:1.1rem; font-weight:600; letter-spacing:0.05em; flex:1;">—</span>
-        <button class="btn-text" id="copyInviteCode" style="padding:8px 14px; border-radius:8px; font-size:0.85rem; border:1px solid var(--border);">Copy</button>
-      </div>
-      <p style="margin-bottom:18px;"><a href="#" id="regenerateCode" style="font-size:0.8rem; color:var(--text-dim);">Code shared with the wrong person? Generate a new one</a></p>
-    </div>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Each branch has its own invite code, in the Branches section below — share the right one for wherever someone's actually joining.</p>
     <div id="staffList"></div>
   </section>
 
@@ -628,8 +627,12 @@
   async function resolveBranchContext(myBranchId){
     const { data: branches } = await supabase.from('branches').select('*').eq('pharmacy_id', pharmacyId).order('created_at');
     branchesCache = branches || [];
+    const bar = document.getElementById('branchBar');
     const switcher = document.getElementById('branchSwitcher');
     const locked = document.getElementById('branchLocked');
+
+    if (branchesCache.length === 0) { bar.style.display = 'none'; return; }
+    bar.style.display = 'block';
 
     if (myBranchId) {
       // Staff — locked to their assigned branch, no switching.
@@ -639,12 +642,20 @@
       locked.style.display = 'inline-block';
       switcher.style.display = 'none';
     } else {
-      // Owner — sees every branch, can switch between them.
+      // Owner — sees every branch, can switch between them. Hidden
+      // entirely when there's only one, since switching to the same
+      // branch isn't a real choice worth showing.
       switcher.innerHTML = branchesCache.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
       currentBranchId = branchesCache[0]?.id || null;
       switcher.value = currentBranchId;
-      switcher.style.display = branchesCache.length > 0 ? 'inline-block' : 'none';
-      locked.style.display = 'none';
+      if (branchesCache.length > 1) {
+        switcher.style.display = 'inline-block';
+        locked.style.display = 'none';
+      } else {
+        switcher.style.display = 'none';
+        locked.textContent = branchesCache[0].name;
+        locked.style.display = 'inline-block';
+      }
     }
   }
 
@@ -662,11 +673,42 @@
     list.innerHTML = '';
     branchesCache.forEach(b => {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:10px 0; border-bottom:1px solid var(--border);';
-      row.innerHTML = `<span style="font-weight:600;">${b.name}</span>`;
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:8px;">${b.name}</div>
+        <p style="color:var(--text-dim); font-size:0.82rem; margin-bottom:8px;">Share this code with anyone joining this specific branch — they'll land here directly, no reassigning needed.</p>
+        <div style="display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px;">
+          <span class="mono" style="font-size:1.05rem; font-weight:600; letter-spacing:0.05em; flex:1;">${b.invite_code}</span>
+          <button class="btn-text branch-copy" data-code="${b.invite_code}" style="padding:6px 12px; border-radius:8px; font-size:0.82rem; border:1px solid var(--border);">Copy</button>
+        </div>
+        <a href="#" class="branch-regenerate" data-id="${b.id}" style="font-size:0.78rem; color:var(--text-dim);">Code shared with the wrong person? Generate a new one</a>`;
       list.appendChild(row);
     });
   }
+
+  document.getElementById('branchList').addEventListener('click', async (e) => {
+    const copyBtn = e.target.closest('.branch-copy');
+    const regenBtn = e.target.closest('.branch-regenerate');
+
+    if (copyBtn) {
+      try {
+        await navigator.clipboard.writeText(copyBtn.dataset.code);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      } catch (err) {
+        alert('Invite code: ' + copyBtn.dataset.code);
+      }
+    }
+
+    if (regenBtn) {
+      e.preventDefault();
+      if (!confirm('This replaces this branch\'s current invite code. Anyone with the old one will no longer be able to join here. Continue?')) return;
+      const newCode = Array.from({length: 6}, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+      const { error } = await supabase.from('branches').update({ invite_code: newCode }).eq('id', regenBtn.dataset.id);
+      if (error) { alert(error.message); return; }
+      await resolveBranchContext(null);
+      await loadBranches();
+    }
+  });
 
   document.getElementById('openBranch').addEventListener('click', () => {
     document.getElementById('branchMsg').className = 'modal-msg';
@@ -753,14 +795,6 @@
   async function loadStaff(){
     const staffSection = document.getElementById('staffSection');
     if (!staffSection) return;
-
-    const inviteBlock = document.getElementById('inviteCodeBlock');
-    if (currentRole === 'owner') {
-      inviteBlock.style.display = 'block';
-      document.getElementById('inviteCodeDisplay').textContent = (await supabase.from('pharmacies').select('invite_code').eq('id', pharmacyId).single()).data?.invite_code || '—';
-    } else {
-      inviteBlock.style.display = 'none';
-    }
 
     const { data: staff } = await supabase.from('pharmacy_staff').select('*').eq('pharmacy_id', pharmacyId).order('created_at');
     const list = document.getElementById('staffList');
@@ -993,28 +1027,6 @@
 
     status.textContent = 'Done — check your downloads folder for 4 files.';
     btn.disabled = false;
-  });
-
-  document.getElementById('copyInviteCode').addEventListener('click', async (e) => {
-    const code = document.getElementById('inviteCodeDisplay').textContent;
-    if (!code || code === '—') return;
-    try {
-      await navigator.clipboard.writeText(code);
-      e.target.textContent = 'Copied!';
-      setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
-    } catch (err) {
-      alert('Your invite code: ' + code);
-    }
-  });
-
-  document.getElementById('regenerateCode').addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (currentRole !== 'owner') return;
-    if (!confirm('This replaces your current invite code. Anyone with the old code will no longer be able to join. Continue?')) return;
-    const newCode = Array.from({length: 6}, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
-    const { error } = await supabase.from('pharmacies').update({ invite_code: newCode }).eq('id', pharmacyId);
-    if (error) { alert(error.message); return; }
-    document.getElementById('inviteCodeDisplay').textContent = newCode;
   });
 
   // ---------- NAFDAC guided verification ----------
