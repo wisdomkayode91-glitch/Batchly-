@@ -138,6 +138,12 @@
   .override-row{display:flex; align-items:center; gap:8px; margin-top:14px; font-size:0.85rem;}
   .override-row input{width:auto;}
 </style>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+  }
+</script>
 </head>
 <body>
 
@@ -169,6 +175,12 @@
     <span id="branchLocked" class="status-pill status-ok mono" style="display:none;"></span>
   </div>
 </div>
+
+<div id="offlineBanner" style="display:none; background:var(--critical); color:#fff; text-align:center; padding:10px 20px; font-size:0.85rem; font-weight:600;">
+  You're offline — showing your last saved data. Nothing new can be recorded until you're back online.
+</div>
+
+<div id="queueBanner" style="display:none; background:var(--accent); color:#fff; text-align:center; padding:8px 20px; font-size:0.82rem; font-weight:600;"></div>
 
 <main>
   <div id="briefing"></div>
@@ -260,6 +272,13 @@
     <div class="empty" id="accountabilityEmpty" style="display:none;">Not enough activity yet to summarize.</div>
   </section>
 
+  <section class="panel" id="approvalsSection" style="display:none;">
+    <h2>Pending approvals</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">When staff void a sale, purchase, or debt, it waits here for you — nothing changes until you decide.</p>
+    <div id="approvalsList"></div>
+    <div class="empty" id="approvalsEmpty" style="display:none;">Nothing waiting on you right now.</div>
+  </section>
+
   <section class="panel">
     <h2>Trash</h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Every voided sale, purchase, and debt lives here — nothing is ever truly gone. Restoring one is itself a logged, reasoned action, same as voiding it was.</p>
@@ -268,10 +287,40 @@
   </section>
 
   <section class="panel">
+    <h2>Find stock elsewhere</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Out of something? Search other Batchly pharmacies who've chosen to share their stock — see what they have and their contact number, nothing else about their business.</p>
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <input type="text" id="networkSearch" placeholder="e.g. Amoxicillin" style="flex:1;">
+      <button class="btn-text" id="networkSearchBtn" style="border:1px solid var(--border); border-radius:8px; padding:9px 16px; white-space:nowrap;">Search</button>
+    </div>
+    <div id="networkResults"></div>
+
+    <div id="sharingSettings" style="display:none; margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+      <h3 style="font-size:0.95rem; margin-bottom:8px;">Your sharing settings</h3>
+      <p style="color:var(--text-dim); font-size:0.85rem; margin-bottom:12px;">Off by default. Turning this on lets other pharmacies searching Batchly see your available stock quantities and this contact number — never your prices, never your NAFDAC checks, nothing else.</p>
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-weight:normal;">
+        <input type="checkbox" id="shareToggle" style="width:auto;">
+        <span>Share my stock with other pharmacies</span>
+      </label>
+      <label for="contactPhone">Contact number to show</label>
+      <input type="tel" id="contactPhone" placeholder="e.g. 0803...">
+      <button class="btn-text" id="saveSharing" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-top:10px;">Save</button>
+      <p id="sharingMsg" style="font-size:0.85rem; margin-top:8px;"></p>
+    </div>
+  </section>
+
+  <section class="panel">
     <h2>Billing</h2>
     <p id="planStatus" style="color:var(--text-dim); font-size:0.9rem; margin-bottom:16px;">Checking your plan…</p>
     <button class="btn-text" id="upgradeBtn" style="border:1px solid var(--accent); color:var(--accent); border-radius:8px; padding:10px 16px; font-size:0.85rem; display:none;">Upgrade to Growth — ₦4,500/month</button>
     <p id="billingMsg" style="font-size:0.85rem; margin-top:10px;"></p>
+  </section>
+
+  <section class="panel" id="queueSection" style="display:none;">
+    <h2>Offline queue</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Sales, purchases, and debts recorded with no connection wait here. They sync automatically the moment you're back online — sales get double-checked against real stock first, so nothing goes through wrong.</p>
+    <button class="btn-text" id="retrySync" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-bottom:14px;">Try syncing now</button>
+    <div id="queueList"></div>
   </section>
 
   <section class="panel">
@@ -501,6 +550,15 @@
 </div>
 
 <script>
+  // ---------- Connectivity ----------
+  // Runs immediately, same as theme — never waits on Supabase.
+  function updateOfflineBanner(){
+    document.getElementById('offlineBanner').style.display = navigator.onLine ? 'none' : 'block';
+  }
+  updateOfflineBanner();
+  window.addEventListener('online', updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
+
   // ---------- Theme ----------
   // Runs immediately — never waits on Supabase, so it always works
   // even on a slow connection.
@@ -529,6 +587,160 @@
   let currentRole = null;
   let currentUserId = null;
   let currentBranchId = null;
+
+  // ---------- Offline queue ----------
+  function queueKey(){ return pharmacyId ? 'batchly-queue-' + pharmacyId : null; }
+  function loadQueue(){
+    const key = queueKey(); if (!key) return [];
+    try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; }
+  }
+  function saveQueue(q){
+    const key = queueKey(); if (!key) return;
+    try { localStorage.setItem(key, JSON.stringify(q)); } catch (e) { /* storage full — queue just won't persist across reload */ }
+  }
+  function queueAction(type, payload){
+    const q = loadQueue();
+    q.push({ id: crypto.randomUUID(), type, payload, queuedAt: new Date().toISOString(), status: 'pending' });
+    saveQueue(q);
+    renderQueue();
+  }
+
+  function renderQueue(){
+    const q = loadQueue();
+    const pendingOrFailed = q.filter(a => a.status !== 'synced');
+    const banner = document.getElementById('queueBanner');
+    const section = document.getElementById('queueSection');
+    const list = document.getElementById('queueList');
+
+    if (pendingOrFailed.length === 0) {
+      banner.style.display = 'none';
+      section.style.display = 'none';
+      return;
+    }
+
+    banner.style.display = 'block';
+    banner.textContent = `${pendingOrFailed.length} item${pendingOrFailed.length === 1 ? '' : 's'} waiting to sync` + (navigator.onLine ? ' — syncing now…' : ' — will sync once you\'re back online.');
+    section.style.display = 'block';
+
+    list.innerHTML = pendingOrFailed.map(a => {
+      const label = a.type === 'sale' ? `Sale: ${a.payload.item_name || 'item'} × ${a.payload.quantity}`
+        : a.type === 'purchase' ? `Purchase: ${a.payload.name}`
+        : `Debt: ${a.payload.party_name} — ₦${a.payload.amount}`;
+      const statusPill = a.status === 'failed'
+        ? `<span class="status-pill status-critical mono">Failed</span>`
+        : `<span class="status-pill status-caution mono">Pending</span>`;
+      return `<div style="padding:10px 0; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;">
+            <span style="font-weight:600;">${label}</span>${statusPill}
+          </div>
+          <div style="color:var(--text-dim); font-size:0.82rem;">Queued ${new Date(a.queuedAt).toLocaleString()}</div>
+          ${a.status === 'failed' ? `<div style="color:var(--critical); font-size:0.82rem; margin-top:2px;">${a.failReason || 'Could not sync'}</div>
+            <button class="btn-text queue-discard" data-id="${a.id}" style="font-size:0.78rem; color:var(--critical); margin-top:6px;">Discard</button>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  document.getElementById('queueList').addEventListener('click', (e) => {
+    const btn = e.target.closest('.queue-discard');
+    if (!btn) return;
+    if (!confirm('Discard this queued item permanently? It will never be recorded.')) return;
+    const q = loadQueue().filter(a => a.id !== btn.dataset.id);
+    saveQueue(q);
+    renderQueue();
+  });
+
+  document.getElementById('retrySync').addEventListener('click', syncQueue);
+
+  async function syncQueue(){
+    if (!pharmacyId || !navigator.onLine) return;
+    let q = loadQueue();
+    const pending = q.filter(a => a.status === 'pending');
+    if (pending.length === 0) return;
+
+    let succeeded = 0, failed = 0;
+
+    for (const action of pending) {
+      try {
+        if (action.type === 'sale') {
+          const { error } = await supabase.rpc('sync_offline_sale', {
+            p_item_id: action.payload.item_id, p_branch_id: action.payload.branch_id,
+            p_quantity: action.payload.quantity, p_unit_price: action.payload.unit_price
+          });
+          if (error) throw error;
+
+        } else if (action.type === 'purchase') {
+          const p = action.payload;
+          let itemId;
+          const { data: existingItem } = await supabase.from('items').select('id').eq('normalized_name', p.name.trim().toLowerCase()).maybeSingle();
+          if (existingItem) { itemId = existingItem.id; }
+          else {
+            const { data: newItem, error: itemErr } = await supabase.from('items').insert({ pharmacy_id: pharmacyId, name: p.name, barcode: p.barcode }).select().single();
+            if (itemErr) throw itemErr;
+            itemId = newItem.id;
+          }
+          let supplierId = null;
+          if (p.supplier_name) {
+            const { data: existingSupplier } = await supabase.from('suppliers').select('id').ilike('name', p.supplier_name).maybeSingle();
+            if (existingSupplier) { supplierId = existingSupplier.id; }
+            else {
+              const { data: newSupplier, error: supErr } = await supabase.from('suppliers').insert({ pharmacy_id: pharmacyId, name: p.supplier_name }).select().single();
+              if (supErr) throw supErr;
+              supplierId = newSupplier.id;
+            }
+          }
+          const { error: batchErr } = await supabase.from('stock_batches').insert({
+            pharmacy_id: pharmacyId, item_id: itemId, supplier_id: supplierId, branch_id: p.branch_id,
+            lot_number: p.lot || null, quantity_purchased: p.quantity_purchased, sellable_units: p.sellable_units,
+            units_remaining: p.sellable_units, cost_price: p.cost_price, expiry_date: p.expiry_date,
+            nafdac_number: p.nafdac_number, recorded_by: currentUserId
+          });
+          if (batchErr) throw batchErr;
+
+        } else if (action.type === 'debt') {
+          const p = action.payload;
+          let customerId = null, supplierId = null;
+          if (p.is_customer) {
+            const { data: existing } = await supabase.from('customers').select('id').ilike('name', p.party_name).is('deleted_at', null).maybeSingle();
+            if (existing) { customerId = existing.id; }
+            else {
+              const { data: created, error: custErr } = await supabase.from('customers').insert({ pharmacy_id: pharmacyId, name: p.party_name, phone: p.phone }).select().single();
+              if (custErr) throw custErr;
+              customerId = created.id;
+            }
+          } else {
+            const { data: existing } = await supabase.from('suppliers').select('id').ilike('name', p.party_name).maybeSingle();
+            if (existing) { supplierId = existing.id; }
+            else {
+              const { data: created, error: supErr } = await supabase.from('suppliers').insert({ pharmacy_id: pharmacyId, name: p.party_name }).select().single();
+              if (supErr) throw supErr;
+              supplierId = created.id;
+            }
+          }
+          const { error: debtErr } = await supabase.from('debts').insert({
+            pharmacy_id: pharmacyId, direction: p.is_customer ? 'customer_owes_pharmacy' : 'pharmacy_owes_supplier',
+            customer_id: customerId, supplier_id: supplierId, amount: p.amount, description: p.description, recorded_by: currentUserId
+          });
+          if (debtErr) throw debtErr;
+        }
+
+        q = q.filter(a => a.id !== action.id);
+        saveQueue(q);
+        succeeded++;
+      } catch (err) {
+        q = q.map(a => a.id === action.id ? { ...a, status: 'failed', failReason: err.message || 'Could not sync' } : a);
+        saveQueue(q);
+        failed++;
+      }
+    }
+
+    renderQueue();
+    if (succeeded > 0 || failed > 0) {
+      await Promise.all([loadStock(), loadSales(), loadPurchases(), loadLedger(), loadCustomers(), loadSuppliers()]);
+      if (failed > 0) alert(`Sync finished: ${succeeded} recorded, ${failed} could not complete — see the Offline Queue panel for why.`);
+    }
+  }
+
+  window.addEventListener('online', syncQueue);
 
   // ---------- Auth guard ----------
   async function getSessionWithRetry(){
@@ -617,8 +829,11 @@
 
     renderBilling(pharmacy.plan);
     await checkForReturningPayment();
+    renderSharingSettings(pharmacy);
+    renderQueue();
+    await syncQueue();
 
-    await loadStock().then(byItem => Promise.all([loadSales(), loadPurchases(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers(), loadSuppliers(), loadCompliance(), loadTrash(), loadBranches()]));
+    await loadStock().then(byItem => Promise.all([loadSales(), loadPurchases(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers(), loadSuppliers(), loadCompliance(), loadTrash(), loadBranches(), loadApprovals()]));
   }
 
   // ---------- Branches ----------
@@ -732,6 +947,60 @@
     await loadBranches();
     await loadStaff(); // staff rows now need this branch as an assignment option
     setTimeout(() => { closeModal('branchOverlay'); btn.disabled = false; btn.textContent = 'Save branch'; }, 700);
+  });
+
+  // ---------- Find stock elsewhere (interpharmacy sharing) ----------
+  document.getElementById('networkSearchBtn').addEventListener('click', runNetworkSearch);
+  document.getElementById('networkSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') runNetworkSearch(); });
+
+  async function runNetworkSearch(){
+    const query = document.getElementById('networkSearch').value.trim();
+    const results = document.getElementById('networkResults');
+    if (!query) { results.innerHTML = ''; return; }
+
+    results.innerHTML = `<p style="color:var(--text-dim); font-size:0.85rem;">Searching…</p>`;
+    const { data, error } = await supabase.rpc('search_shared_stock', { p_query: query });
+
+    if (error || !data || data.length === 0) {
+      results.innerHTML = `<p style="color:var(--text-dim); font-size:0.85rem;">No pharmacies sharing that item right now.</p>`;
+      return;
+    }
+
+    results.innerHTML = data.map(r => `<div style="padding:10px 0; border-bottom:1px solid var(--border);">
+        <div style="font-weight:600;">${r.item_name}</div>
+        <div style="color:var(--text-dim); font-size:0.85rem;">${r.pharmacy_name} — ${r.branch_name} · ${r.units_available} units available</div>
+        ${r.contact_phone ? `<div style="font-size:0.85rem; margin-top:2px;"><a href="tel:${r.contact_phone}" style="color:var(--brand);">📞 ${r.contact_phone}</a></div>` : ''}
+      </div>`).join('');
+  }
+
+  function renderSharingSettings(pharmacy){
+    const section = document.getElementById('sharingSettings');
+    section.style.display = (currentRole === 'owner') ? 'block' : 'none';
+    if (currentRole !== 'owner') return;
+    document.getElementById('shareToggle').checked = !!pharmacy.share_stock_publicly;
+    document.getElementById('contactPhone').value = pharmacy.contact_phone || '';
+  }
+
+  document.getElementById('saveSharing').addEventListener('click', async () => {
+    const btn = document.getElementById('saveSharing');
+    const msg = document.getElementById('sharingMsg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const share = document.getElementById('shareToggle').checked;
+    const phone = document.getElementById('contactPhone').value.trim();
+
+    if (share && !phone) {
+      msg.textContent = 'Add a contact number before turning sharing on — other pharmacies need a way to reach you.';
+      msg.style.color = 'var(--critical)';
+      btn.disabled = false; btn.textContent = 'Save'; return;
+    }
+
+    const { error } = await supabase.from('pharmacies').update({ share_stock_publicly: share, contact_phone: phone || null }).eq('id', pharmacyId);
+
+    if (error) { msg.textContent = error.message; msg.style.color = 'var(--critical)'; btn.disabled = false; btn.textContent = 'Save'; return; }
+
+    msg.textContent = 'Saved.'; msg.style.color = 'var(--positive)';
+    btn.disabled = false; btn.textContent = 'Save';
   });
 
   // ---------- Billing ----------
@@ -871,6 +1140,47 @@
   }
 
   // ---------- Trash ----------
+  // ---------- Pending approvals ----------
+  async function loadApprovals(){
+    const section = document.getElementById('approvalsSection');
+    section.style.display = (currentRole === 'owner') ? 'block' : 'none';
+    if (currentRole !== 'owner') return;
+
+    const { data: requests } = await supabase
+      .from('void_requests').select('*').eq('pharmacy_id', pharmacyId).eq('status', 'pending').order('requested_at', { ascending: false });
+
+    const list = document.getElementById('approvalsList');
+    list.innerHTML = '';
+    (requests || []).forEach(r => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:4px; text-transform:capitalize;">${r.record_type} void requested</div>
+        <div style="color:var(--text-dim); font-size:0.85rem; margin-bottom:8px; font-style:italic;">"${r.reason}"</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button class="btn-text approval-approve" data-id="${r.id}" style="font-size:0.78rem; color:var(--positive); border:1px solid var(--border); border-radius:6px; padding:5px 10px;">Approve</button>
+          <button class="btn-text approval-reject" data-id="${r.id}" style="font-size:0.78rem; color:var(--critical); border:1px solid var(--border); border-radius:6px; padding:5px 10px;">Reject</button>
+        </div>`;
+      list.appendChild(row);
+    });
+    document.getElementById('approvalsEmpty').style.display = (requests || []).length === 0 ? 'block' : 'none';
+  }
+
+  document.getElementById('approvalsList').addEventListener('click', async (e) => {
+    const approveBtn = e.target.closest('.approval-approve');
+    const rejectBtn = e.target.closest('.approval-reject');
+    if (!approveBtn && !rejectBtn) return;
+
+    if (approveBtn) {
+      const { error } = await supabase.rpc('approve_void_request', { p_request_id: approveBtn.dataset.id });
+      if (error) { alert(error.message); return; }
+    }
+    if (rejectBtn) {
+      const { error } = await supabase.rpc('reject_void_request', { p_request_id: rejectBtn.dataset.id });
+      if (error) { alert(error.message); return; }
+    }
+    await Promise.all([loadApprovals(), loadSales(), loadPurchases(), loadLedger(), loadStock(), loadTrash()]);
+  });
+
   async function loadTrash(){
     const [voidedSales, voidedBatches, voidedDebts] = await Promise.all([
       supabase.from('sales').select('id, quantity, unit_price, sale_date, recorded_by, items(name)').eq('branch_id', currentBranchId).not('deleted_at', 'is', null).order('sale_date', { ascending: false }),
@@ -1060,6 +1370,14 @@
 
   // ---------- Load stock + Guardian alerts ----------
   async function loadStock(){
+    const stockBody = document.getElementById('stockBody');
+    const stockEmpty = document.getElementById('stockEmpty');
+    const alertsEl = document.getElementById('alerts');
+
+    if (!navigator.onLine) {
+      return renderStockFromCache();
+    }
+
     const { data: batches, error } = await supabase
       .from('stock_batches')
       .select('id, item_id, units_remaining, expiry_date, nafdac_number, nafdac_verified, nafdac_flagged, items(name)')
@@ -1068,13 +1386,15 @@
       .is('deleted_at', null)
       .order('expiry_date', { ascending: true });
 
-    const stockBody = document.getElementById('stockBody');
-    const stockEmpty = document.getElementById('stockEmpty');
-    const alertsEl = document.getElementById('alerts');
     stockBody.innerHTML = '';
     alertsEl.innerHTML = '';
 
-    if (error || !batches || batches.length === 0) {
+    if (error) {
+      // A network hiccup mid-session, not a genuine "offline" state —
+      // fall back the same way rather than showing a blank screen.
+      return renderStockFromCache();
+    }
+    if (!batches || batches.length === 0) {
       stockEmpty.style.display = 'block';
       return {};
     }
@@ -1131,7 +1451,43 @@
       alertsEl.appendChild(div);
     });
 
+    try {
+      localStorage.setItem('batchly-stock-cache-' + currentBranchId, JSON.stringify({ savedAt: Date.now(), byItem }));
+    } catch (e) { /* storage full or unavailable — offline fallback just won't have data, not fatal */ }
+
     return byItem;
+  }
+
+  function renderStockFromCache(){
+    const stockBody = document.getElementById('stockBody');
+    const stockEmpty = document.getElementById('stockEmpty');
+    stockBody.innerHTML = '';
+
+    let cached;
+    try { cached = JSON.parse(localStorage.getItem('batchly-stock-cache-' + currentBranchId)); } catch (e) { cached = null; }
+
+    if (!cached) {
+      stockEmpty.textContent = "You're offline, and there's no saved stock data yet for this branch — connect once to load it.";
+      stockEmpty.style.display = 'block';
+      return {};
+    }
+    stockEmpty.style.display = 'none';
+
+    const ageMinutes = Math.round((Date.now() - cached.savedAt) / 60000);
+    const ageLabel = document.createElement('div');
+    ageLabel.style.cssText = 'font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;';
+    ageLabel.textContent = `Last synced ${ageMinutes < 1 ? 'just now' : ageMinutes + ' minute' + (ageMinutes === 1 ? '' : 's') + ' ago'} — read-only until you're back online.`;
+    stockBody.appendChild(ageLabel);
+
+    Object.values(cached.byItem).forEach((info) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
+      row.innerHTML = `<div style="font-weight:600; margin-bottom:6px;">${info.name}</div>
+        <div style="color:var(--text-dim); font-size:0.88rem;">${info.units} units left (as of last sync)</div>`;
+      stockBody.appendChild(row);
+    });
+
+    return {};
   }
 
   // ---------- Daily Briefing + velocity-based Guardian alert ----------
@@ -1202,6 +1558,24 @@
       alertsEl.appendChild(div);
     });
 
+    // Proactive accountability nudge — the owner shouldn't have to
+    // remember to go check Trash. If a staff member voided anything
+    // today, surface it right here, right now.
+    if (currentRole === 'owner') {
+      const [saleVoids, batchVoids, debtVoids] = await Promise.all([
+        supabase.from('sale_edits').select('edited_by, sales!inner(branch_id)').eq('change_type', 'delete').eq('sales.branch_id', currentBranchId).gte('edited_at', todayStart.toISOString()).neq('edited_by', currentUserId),
+        supabase.from('batch_edits').select('edited_by, stock_batches!inner(branch_id)').eq('change_type', 'delete').eq('stock_batches.branch_id', currentBranchId).gte('edited_at', todayStart.toISOString()).neq('edited_by', currentUserId),
+        supabase.from('debt_edits').select('edited_by, debts!inner(pharmacy_id)').eq('change_type', 'delete').eq('debts.pharmacy_id', pharmacyId).gte('edited_at', todayStart.toISOString()).neq('edited_by', currentUserId),
+      ]);
+      const staffVoidCount = (saleVoids.data?.length || 0) + (batchVoids.data?.length || 0) + (debtVoids.data?.length || 0);
+      if (staffVoidCount > 0) {
+        const div = document.createElement('div');
+        div.className = 'alert caution';
+        div.innerHTML = `Staff voided <b>${staffVoidCount}</b> record${staffVoidCount === 1 ? '' : 's'} today — worth a quick look in <b>Trash</b> to see why.`;
+        alertsEl.appendChild(div);
+      }
+    }
+
     briefingEl.innerHTML = `<div class="briefing-card"><h3>👋 Yesterday</h3>
       <p class="briefing-line"><b>₦${yRevenue.toLocaleString()}</b> in sales across <b>${yCount}</b> transaction${yCount === 1 ? '' : 's'}.</p>
       <p class="briefing-line dim">${stockoutWarnings.length ? stockoutWarnings.length + ' item(s) may run out soon — see below.' : 'No items look likely to run out in the next few days.'}</p></div>`;
@@ -1258,11 +1632,23 @@
     const historyBtn = e.target.closest('.sale-history');
 
     if (voidBtn) {
-      const reason = prompt('Voiding this sale restores its stock and closes it permanently — it cannot be undone or edited afterward. What happened? (required)');
+      const isOwner = currentRole === 'owner';
+      const reason = prompt(isOwner
+        ? 'Voiding this sale restores its stock and closes it permanently — it cannot be undone or edited afterward. What happened? (required)'
+        : 'This will be sent to the owner for approval before it takes effect. What happened? (required)');
       if (!reason || !reason.trim()) return;
       const saleId = voidBtn.dataset.id;
       const oldQty = parseInt(voidBtn.dataset.qty);
       const batchId = voidBtn.dataset.batch;
+
+      if (!isOwner) {
+        await supabase.from('void_requests').insert({
+          pharmacy_id: pharmacyId, record_type: 'sale', record_id: saleId,
+          requested_by: currentUserId, reason: reason.trim()
+        });
+        alert('Sent to the owner for approval — this sale stays as-is until then.');
+        return;
+      }
 
       await supabase.rpc('adjust_batch_units', { p_batch_id: batchId, p_delta: oldQty });
 
@@ -1333,9 +1719,22 @@
     const historyBtn = e.target.closest('.batch-history');
 
     if (voidBtn) {
-      const reason = prompt('Voiding this purchase removes it from stock permanently — it cannot be edited or undone. What happened? (required)');
+      const isOwner = currentRole === 'owner';
+      const reason = prompt(isOwner
+        ? 'Voiding this purchase removes it from stock permanently — it cannot be edited or undone. What happened? (required)'
+        : 'This will be sent to the owner for approval before it takes effect. What happened? (required)');
       if (!reason || !reason.trim()) return;
       const batchId = voidBtn.dataset.id;
+
+      if (!isOwner) {
+        await supabase.from('void_requests').insert({
+          pharmacy_id: pharmacyId, record_type: 'purchase', record_id: batchId,
+          requested_by: currentUserId, reason: reason.trim()
+        });
+        alert('Sent to the owner for approval — this purchase stays as-is until then.');
+        return;
+      }
+
       const { data: batch } = await supabase.from('stock_batches').select('sellable_units, cost_price, expiry_date').eq('id', batchId).single();
 
       await supabase.from('stock_batches').update({ deleted_at: new Date().toISOString() }).eq('id', batchId);
@@ -1450,9 +1849,21 @@
     btn.disabled = true; btn.textContent = 'Recording…';
 
     const itemId = document.getElementById('saleItem').value;
+    const itemName = document.getElementById('saleItem').selectedOptions[0]?.textContent || 'this item';
     const qty = parseInt(document.getElementById('saleQty').value, 10);
     const price = parseFloat(document.getElementById('salePrice').value);
     const overrideChecked = document.getElementById('saleOverride').checked;
+
+    if (!navigator.onLine) {
+      // Offline: no expired-stock override capability here — that's a
+      // deliberate manager decision that can't be pre-approved blind.
+      // Just queue the basics; the real FEFO batch pick and expiry
+      // check happen fresh, safely, the moment this actually syncs.
+      queueAction('sale', { item_id: itemId, item_name: itemName, branch_id: currentBranchId, quantity: qty, unit_price: price });
+      msg.textContent = 'Queued — will record once you\'re back online.'; msg.className = 'modal-msg success';
+      setTimeout(() => { closeModal('saleOverlay'); document.getElementById('saleForm').reset(); btn.disabled = false; btn.textContent = 'Record sale'; }, 700);
+      return;
+    }
 
     // FEFO: earliest-expiring batch with stock, for this item, in this branch —
     // selling must never silently pull stock from a different physical location.
@@ -1538,6 +1949,20 @@
     const nafdacNumber = document.getElementById('purchaseNafdac').value.trim();
     const scannedBarcode = document.getElementById('purchaseBarcode').value.trim();
 
+    if (!navigator.onLine) {
+      // Purchases have no scarcity conflict — safe to queue in full,
+      // new item/supplier creation included. Sync just replays the
+      // exact same find-or-create logic once back online.
+      queueAction('purchase', {
+        name, supplier_name: supplierName, lot, quantity_purchased: qty, sellable_units: sellable,
+        cost_price: cost, expiry_date: expiry, nafdac_number: nafdacNumber || null, barcode: scannedBarcode || null,
+        branch_id: currentBranchId
+      });
+      msg.textContent = 'Queued — will record once you\'re back online.'; msg.className = 'modal-msg success';
+      setTimeout(() => { closeModal('purchaseOverlay'); btn.disabled = false; btn.textContent = 'Record purchase'; }, 700);
+      return;
+    }
+
     // Find or create the item — normalized_name in the database already
     // prevents case/whitespace duplicates like "Paracetamol Type A" vs "paracetamol type a".
     let itemId;
@@ -1618,6 +2043,14 @@
     const amount = parseFloat(document.getElementById('debtAmount').value);
     const description = document.getElementById('debtDescription').value.trim();
     const isCustomer = debtMode === 'customer_owes_pharmacy';
+
+    if (!navigator.onLine) {
+      // No scarcity conflict here either — safe to queue in full.
+      queueAction('debt', { party_name: partyName, phone: phone || null, amount, description: description || null, is_customer: isCustomer });
+      msg.textContent = 'Queued — will record once you\'re back online.'; msg.className = 'modal-msg success';
+      setTimeout(() => { closeModal('debtOverlay'); btn.disabled = false; btn.textContent = 'Save debt'; }, 700);
+      return;
+    }
 
     let customerId = null, supplierId = null;
 
@@ -1718,9 +2151,22 @@
     const historyBtn = e.target.closest('.debt-history');
 
     if (voidBtn) {
-      const reason = prompt('Voiding this debt closes it permanently — it cannot be edited or undone. What happened? (required)');
+      const isOwner = currentRole === 'owner';
+      const reason = prompt(isOwner
+        ? 'Voiding this debt closes it permanently — it cannot be edited or undone. What happened? (required)'
+        : 'This will be sent to the owner for approval before it takes effect. What happened? (required)');
       if (!reason || !reason.trim()) return;
       const debtId = voidBtn.dataset.id;
+
+      if (!isOwner) {
+        await supabase.from('void_requests').insert({
+          pharmacy_id: pharmacyId, record_type: 'debt', record_id: debtId,
+          requested_by: currentUserId, reason: reason.trim()
+        });
+        alert('Sent to the owner for approval — this debt stays as-is until then.');
+        return;
+      }
+
       const { data: debt } = await supabase.from('debts').select('amount, description').eq('id', debtId).single();
 
       await supabase.from('debts').update({ deleted_at: new Date().toISOString() }).eq('id', debtId);
