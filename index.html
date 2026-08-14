@@ -200,6 +200,12 @@
   footer{border-top:1px solid var(--border); padding:32px 0; }
   .footer-row{display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between; align-items:center; font-size:0.85rem; color:var(--text-dim);}
 </style>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+  }
+</script>
 </head>
 <body>
 
@@ -263,8 +269,8 @@
             <span class="tag">Compliance calendar</span>
           </div>
           <div class="carousel-slide">
-            <span class="slide-badge soon">Coming soon</span>
-            <p>"Three pharmacies near you on Batchly have Ventolin in stock right now — the patient in front of you doesn't have to leave empty-handed."</p>
+            <span class="slide-badge live">Live now</span>
+            <p>"Three pharmacies on Batchly have Ventolin in stock right now — the patient in front of you doesn't have to leave empty-handed."</p>
             <span class="tag">Interpharmacy stock-sharing</span>
           </div>
           <div class="carousel-slide">
@@ -364,26 +370,28 @@
           <ul>
             <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Unlimited sales &amp; purchase recording</li>
             <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Batch &amp; expiry tracking with FEFO</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Customer &amp; supplier debt ledger</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>1 pharmacy, single branch</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>NAFDAC counterfeit verification — free on every plan</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Up to 30 items, 1 branch, owner-only</li>
           </ul>
           <a href="auth.html#signup" class="btn btn-ghost" style="margin-top:auto;">Get started free</a>
         </div>
         <div class="price-card featured">
-          <span class="plan-badge">EARLY ACCESS</span>
+          <span class="plan-badge">MOST POPULAR</span>
           <h3>Growth</h3>
-          <div class="amount">~₦4,500<span>/month, target price</span></div>
+          <div class="amount">₦4,500<span>/month</span></div>
           <ul>
             <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Everything in Starter</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>NAFDAC counterfeit verification</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Unlimited inventory &amp; multiple branches</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Staff accounts with roles &amp; permissions</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Ledger — customer &amp; supplier debt tracking</li>
             <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>PCN/NAFDAC compliance calendar</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Guardian alerts &amp; staff accounts</li>
-            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Multi-branch, when you're ready</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Supplier trust scoring &amp; interpharmacy stock-sharing</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Smart stockout predictions &amp; full data export</li>
           </ul>
-          <a href="auth.html#signup" class="btn btn-primary" style="margin-top:auto;">Join early access</a>
+          <a href="auth.html#signup" class="btn btn-primary" style="margin-top:auto;">Upgrade to Growth</a>
         </div>
       </div>
-      <p class="pricing-note">Growth is still being built — join free today and you'll be offered it first, at this price, before it's public.</p>
+      <p class="pricing-note">One flat price. No hidden tiers, no per-branch fees, no "contact us."</p>
     </div>
   </section>
 
