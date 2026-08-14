@@ -12,6 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <script src="supabase-config.js" defer></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js" defer></script>
 <style>
   :root{
     --bg:#FBFAF6; --surface:#F3F1EA; --surface-2:#E8E4D8; --border:#DCD7C8;
@@ -224,8 +225,9 @@
   </section>
 
   <section class="panel">
-    <h2>Ledger</h2>
+    <h2>Ledger <span id="ledgerLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Money owed to you, and money you owe suppliers — both in one place.</p>
+    <p id="ledgerUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">Tracking debts is a Growth feature — see Billing below to upgrade.</p>
     <div id="ledgerCustomers"></div>
     <div id="ledgerSuppliers" style="margin-top:18px;"></div>
     <div class="empty" id="ledgerEmpty" style="display:none;">No open debts — your ledger is clear.</div>
@@ -238,16 +240,18 @@
   </section>
 
   <section class="panel">
-    <h2>Compliance calendar</h2>
+    <h2>Compliance calendar <span id="complianceLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">PCN, NAFDAC, and other license renewals — tracked so nothing lapses quietly.</p>
+    <p id="complianceUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">The compliance calendar is a Growth feature — see Billing below to upgrade.</p>
     <button class="btn-text" id="openCompliance" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-bottom:16px;">+ Add a renewal date</button>
     <div id="complianceList"></div>
     <div class="empty" id="complianceEmpty" style="display:none;">No renewal dates saved yet.</div>
   </section>
 
   <section class="panel">
-    <h2>Suppliers</h2>
+    <h2>Suppliers <span id="suppliersLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Trust builds from what you've actually checked — not a guess.</p>
+    <p id="suppliersUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">Supplier trust scoring is a Growth feature — see Billing below to upgrade.</p>
     <div id="supplierList"></div>
     <div class="empty" id="supplierEmpty" style="display:none;">No suppliers saved yet — they're added automatically when you record a purchase.</div>
   </section>
@@ -287,9 +291,10 @@
   </section>
 
   <section class="panel">
-    <h2>Find stock elsewhere</h2>
+    <h2>Find stock elsewhere <span id="networkLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">Out of something? Search other Batchly pharmacies who've chosen to share their stock — see what they have and their contact number, nothing else about their business.</p>
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
+    <p id="networkUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">Interpharmacy stock-sharing is a Growth feature — see Billing below to upgrade.</p>
+    <div id="networkSearchWrap" style="display:flex; gap:8px; margin-bottom:14px;">
       <input type="text" id="networkSearch" placeholder="e.g. Amoxicillin" style="flex:1;">
       <button class="btn-text" id="networkSearchBtn" style="border:1px solid var(--border); border-radius:8px; padding:9px 16px; white-space:nowrap;">Search</button>
     </div>
@@ -314,6 +319,16 @@
     <p id="planStatus" style="color:var(--text-dim); font-size:0.9rem; margin-bottom:16px;">Checking your plan…</p>
     <button class="btn-text" id="upgradeBtn" style="border:1px solid var(--accent); color:var(--accent); border-radius:8px; padding:10px 16px; font-size:0.85rem; display:none;">Upgrade to Growth — ₦4,500/month</button>
     <p id="billingMsg" style="font-size:0.85rem; margin-top:10px;"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Scan a document</h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:6px;">Turn a photo of something <b>printed</b> — a supplier invoice, a printed price list, a typed label — into text you can copy. Works entirely on your phone, no internet needed once the page has loaded.</p>
+    <p style="color:var(--text-dim); font-size:0.85rem; margin-bottom:14px;">Honest limit: this reads printed text reliably. It does <b>not</b> reliably read handwriting — a handwritten notebook page will come out wrong more often than right, so please don't rely on it for that yet.</p>
+    <input type="file" id="scanFile" accept="image/*" capture="environment" style="margin-bottom:12px;">
+    <div id="scanProgress" style="display:none; color:var(--text-dim); font-size:0.85rem; margin-bottom:10px;"></div>
+    <textarea id="scanResult" rows="8" placeholder="Extracted text will appear here — review and correct it before using it." style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:0.85rem; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text);"></textarea>
+    <button class="btn-text" id="scanCopy" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-top:10px;">Copy text</button>
   </section>
 
   <section class="panel" id="queueSection" style="display:none;">
@@ -559,6 +574,49 @@
   window.addEventListener('online', updateOfflineBanner);
   window.addEventListener('offline', updateOfflineBanner);
 
+  // ---------- Scan a document (client-side OCR) ----------
+  // Runs entirely on-device via Tesseract.js — no server, no API key,
+  // no signup needed. Never saves anything automatically; it only ever
+  // fills an editable text box for the person to review and correct.
+  document.getElementById('scanFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const progress = document.getElementById('scanProgress');
+    const result = document.getElementById('scanResult');
+    progress.style.display = 'block';
+    progress.textContent = 'Reading the image… this can take 10–30 seconds on a phone.';
+    result.value = '';
+
+    try {
+      const { data } = await Tesseract.recognize(file, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            progress.textContent = `Reading… ${Math.round(m.progress * 100)}%`;
+          }
+        }
+      });
+      result.value = data.text.trim() || '(No text found — try a clearer, well-lit photo with the text held flat and upright.)';
+    } catch (err) {
+      progress.textContent = '';
+      result.value = "Couldn't read that image. Try a clearer photo — good lighting, text held flat, filling most of the frame.";
+    }
+    progress.style.display = 'none';
+  });
+
+  document.getElementById('scanCopy').addEventListener('click', async () => {
+    const result = document.getElementById('scanResult');
+    if (!result.value) return;
+    try {
+      await navigator.clipboard.writeText(result.value);
+      const btn = document.getElementById('scanCopy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy text'; }, 1500);
+    } catch (err) {
+      result.select();
+    }
+  });
+
   // ---------- Theme ----------
   // Runs immediately — never waits on Supabase, so it always works
   // even on a slow connection.
@@ -587,6 +645,7 @@
   let currentRole = null;
   let currentUserId = null;
   let currentBranchId = null;
+  let currentPlan = 'starter';
 
   // ---------- Offline queue ----------
   function queueKey(){ return pharmacyId ? 'batchly-queue-' + pharmacyId : null; }
@@ -827,7 +886,9 @@
 
     await resolveBranchContext(myMembership?.branch_id);
 
+    currentPlan = pharmacy.plan;
     renderBilling(pharmacy.plan);
+    applyPlanGating();
     await checkForReturningPayment();
     renderSharingSettings(pharmacy);
     renderQueue();
@@ -926,6 +987,10 @@
   });
 
   document.getElementById('openBranch').addEventListener('click', () => {
+    if (currentPlan !== 'growth' && branchesCache.length >= 1) {
+      alert('Starter is limited to 1 branch. Upgrade to Growth in the Billing section to add more.');
+      return;
+    }
     document.getElementById('branchMsg').className = 'modal-msg';
     document.getElementById('branchForm').reset();
     openModal('branchOverlay');
@@ -975,8 +1040,8 @@
 
   function renderSharingSettings(pharmacy){
     const section = document.getElementById('sharingSettings');
-    section.style.display = (currentRole === 'owner') ? 'block' : 'none';
-    if (currentRole !== 'owner') return;
+    section.style.display = (currentRole === 'owner' && pharmacy.plan === 'growth') ? 'block' : 'none';
+    if (currentRole !== 'owner' || pharmacy.plan !== 'growth') return;
     document.getElementById('shareToggle').checked = !!pharmacy.share_stock_publicly;
     document.getElementById('contactPhone').value = pharmacy.contact_phone || '';
   }
@@ -1350,9 +1415,11 @@
     if (!btn) return;
     const batchId = btn.dataset.batch;
     const number = btn.dataset.number;
+
+    if (!confirm(`You're leaving Batchly to verify this product on NAFDAC's official database.\n\nNAFDAC Reg. No. ${number}\n\nContinue to NAFDAC?`)) return;
     window.open('https://greenbook.nafdac.gov.ng/', '_blank');
 
-    const matched = confirm('Opened the NAFDAC Greenbook. Search for "' + number + '" there.\n\nPress OK if the product name, manufacturer, and details MATCHED.\nPress Cancel if it did NOT match, or you couldn\'t find it.');
+    const matched = confirm('Search for "' + number + '" there.\n\nPress OK if the product name, manufacturer, and details MATCHED.\nPress Cancel if it did NOT match, or you couldn\'t find it.');
 
     if (matched) {
       await supabase.rpc('set_nafdac_status', { p_batch_id: batchId, p_verified: true, p_flagged: false });
@@ -1431,7 +1498,10 @@
       } else if (info.nafdacVerified) {
         nafdacCell = `<span class="status-pill status-ok mono">✓ Verified</span>`;
       } else if (info.nafdacNumber) {
-        nafdacCell = `<button class="btn-text nafdac-check" data-batch="${info.activeBatchId}" data-number="${info.nafdacNumber}" style="font-size:0.8rem; border:1px solid var(--border); border-radius:6px; padding:5px 9px;">Check ${info.nafdacNumber}</button>`;
+        nafdacCell = `<span style="display:flex; flex-direction:column; gap:2px;">
+            <span style="font-size:0.78rem; color:var(--text-dim);">NAFDAC Reg. No. <span class="mono">${info.nafdacNumber}</span></span>
+            <button class="btn-text nafdac-check" data-batch="${info.activeBatchId}" data-number="${info.nafdacNumber}" style="font-size:0.8rem; border:1px solid var(--border); border-radius:6px; padding:5px 9px; width:fit-content;">🔎 Verify on NAFDAC</button>
+          </span>`;
       } else {
         nafdacCell = `<span style="color:var(--text-dim); font-size:0.82rem;">No # on file</span>`;
       }
@@ -2026,6 +2096,10 @@
   debtModeSupplier.addEventListener('click', () => setDebtMode('pharmacy_owes_supplier'));
 
   document.getElementById('openDebt').addEventListener('click', () => {
+    if (currentPlan !== 'growth') {
+      alert('Tracking debts is a Growth feature. Upgrade in the Billing section to unlock the Ledger.');
+      return;
+    }
     document.getElementById('debtMsg').className = 'modal-msg';
     document.getElementById('debtForm').reset();
     setDebtMode('customer_owes_pharmacy');
@@ -2368,6 +2442,32 @@
       list.appendChild(row);
     });
     document.getElementById('complianceEmpty').style.display = (dates || []).length === 0 ? 'block' : 'none';
+  }
+
+  // ---------- Plan gating ----------
+  // Real limits are enforced by the database (RLS + triggers) — this
+  // is the honest UI layer on top, so people see a clear "upgrade to
+  // unlock" message instead of a confusing empty panel or a raw
+  // database error when they hit a Starter limit.
+  function applyPlanGating(){
+    const isGrowth = currentPlan === 'growth';
+
+    document.getElementById('ledgerLock').style.display = isGrowth ? 'none' : 'inline-block';
+    document.getElementById('ledgerUpgradeNotice').style.display = isGrowth ? 'none' : 'block';
+
+    document.getElementById('complianceLock').style.display = isGrowth ? 'none' : 'inline-block';
+    document.getElementById('complianceUpgradeNotice').style.display = isGrowth ? 'none' : 'block';
+    document.getElementById('openCompliance').style.display = isGrowth ? 'inline-block' : 'none';
+
+    document.getElementById('suppliersLock').style.display = isGrowth ? 'none' : 'inline-block';
+    document.getElementById('suppliersUpgradeNotice').style.display = isGrowth ? 'none' : 'block';
+
+    document.getElementById('networkLock').style.display = isGrowth ? 'none' : 'inline-block';
+    document.getElementById('networkUpgradeNotice').style.display = isGrowth ? 'none' : 'block';
+    document.getElementById('networkSearchWrap').style.display = isGrowth ? 'flex' : 'none';
+
+    document.getElementById('exportData').style.display = isGrowth ? 'inline-block' : 'none';
+    document.getElementById('exportStatus').textContent = isGrowth ? '' : 'Data export is a Growth feature — see Billing below to upgrade.';
   }
 
   async function loadSuppliers(){
