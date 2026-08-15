@@ -240,6 +240,16 @@
   </section>
 
   <section class="panel">
+    <h2>Refill reminders <span id="remindersLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
+    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:6px;">Flag a customer for a refill nudge on a future date. Sending is a real tap, not automatic — no message goes out without you choosing to send it.</p>
+    <p style="color:var(--text-dim); font-size:0.82rem; margin-bottom:14px;">Messages currently arrive as "From: Termii," not "From: Batchly" — a real limit until a branded sender ID is registered with Nigerian business documents.</p>
+    <p id="remindersUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">Refill reminders are a Growth feature — see Billing below to upgrade.</p>
+    <button class="btn-text" id="openReminder" style="border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:0.85rem; margin-bottom:16px;">+ Set a reminder</button>
+    <div id="reminderList"></div>
+    <div class="empty" id="reminderEmpty" style="display:none;">No reminders set yet.</div>
+  </section>
+
+  <section class="panel">
     <h2>Compliance calendar <span id="complianceLock" class="status-pill status-caution mono" style="display:none;">Growth</span></h2>
     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:14px;">PCN, NAFDAC, and other license renewals — tracked so nothing lapses quietly.</p>
     <p id="complianceUpgradeNotice" style="display:none; color:var(--accent); font-size:0.85rem; margin-bottom:14px;">The compliance calendar is a Growth feature — see Billing below to upgrade.</p>
@@ -560,6 +570,26 @@
         <button type="submit" class="btn btn-primary" id="editCustomerBtn">Save</button>
       </div>
       <div class="modal-msg" id="editCustomerMsg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- REMINDER MODAL -->
+<div class="overlay" id="reminderOverlay">
+  <div class="modal">
+    <h2>Set a refill reminder</h2>
+    <form id="reminderForm">
+      <label for="reminderCustomer">Customer</label>
+      <select id="reminderCustomer" required></select>
+      <label for="reminderItem">What are they refilling?</label>
+      <input type="text" id="reminderItem" required placeholder="e.g. Amlodipine 5mg">
+      <label for="reminderDate">Remind on</label>
+      <input type="date" id="reminderDate" required>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-cancel" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="reminderSubmitBtn">Save reminder</button>
+      </div>
+      <div class="modal-msg" id="reminderMsg"></div>
     </form>
   </div>
 </div>
@@ -894,7 +924,7 @@
     renderQueue();
     await syncQueue();
 
-    await loadStock().then(byItem => Promise.all([loadSales(), loadPurchases(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers(), loadSuppliers(), loadCompliance(), loadTrash(), loadBranches(), loadApprovals()]));
+    await loadStock().then(byItem => Promise.all([loadSales(), loadPurchases(), loadBriefing(byItem), loadStaff(), loadLedger(), loadCustomers(), loadSuppliers(), loadCompliance(), loadTrash(), loadBranches(), loadApprovals(), loadReminders()]));
   }
 
   // ---------- Branches ----------
@@ -2326,6 +2356,102 @@
     document.getElementById('customerEmpty').style.display = (customers || []).length === 0 ? 'block' : 'none';
   }
 
+  // ---------- Refill reminders ----------
+  document.getElementById('openReminder').addEventListener('click', async () => {
+    if (currentPlan !== 'growth') {
+      alert('Refill reminders are a Growth feature. Upgrade in the Billing section to unlock this.');
+      return;
+    }
+    const { data: customers } = await supabase.from('customers').select('id, name, phone').eq('pharmacy_id', pharmacyId).is('deleted_at', null).order('name');
+    const select = document.getElementById('reminderCustomer');
+    const withPhone = (customers || []).filter(c => c.phone);
+    if (withPhone.length === 0) {
+      alert('No customers with a phone number saved yet. Add a phone number to a customer first.');
+      return;
+    }
+    select.innerHTML = withPhone.map(c => `<option value="${c.id}">${c.name} — ${c.phone}</option>`).join('');
+    document.getElementById('reminderMsg').className = 'modal-msg';
+    document.getElementById('reminderForm').reset();
+    openModal('reminderOverlay');
+  });
+
+  document.getElementById('reminderForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('reminderSubmitBtn');
+    const msg = document.getElementById('reminderMsg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const customerId = document.getElementById('reminderCustomer').value;
+    const itemName = document.getElementById('reminderItem').value.trim();
+    const reminderDate = document.getElementById('reminderDate').value;
+
+    const { error } = await supabase.from('refill_reminders').insert({
+      pharmacy_id: pharmacyId, customer_id: customerId, item_name: itemName,
+      reminder_date: reminderDate, created_by: currentUserId
+    });
+
+    if (error) { msg.textContent = error.message; msg.className = 'modal-msg error'; btn.disabled = false; btn.textContent = 'Save reminder'; return; }
+
+    msg.textContent = 'Reminder saved.'; msg.className = 'modal-msg success';
+    await loadReminders();
+    setTimeout(() => { closeModal('reminderOverlay'); btn.disabled = false; btn.textContent = 'Save reminder'; }, 700);
+  });
+
+  async function loadReminders(){
+    if (currentPlan !== 'growth') return;
+
+    const { data: reminders } = await supabase
+      .from('refill_reminders')
+      .select('*, customers(name, phone)')
+      .eq('pharmacy_id', pharmacyId)
+      .eq('sent', false)
+      .order('reminder_date');
+
+    const list = document.getElementById('reminderList');
+    list.innerHTML = '';
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    (reminders || []).forEach(r => {
+      const due = new Date(r.reminder_date);
+      const isDue = due <= today;
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border);';
+      row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;">
+          <div>
+            <div style="font-weight:600;">${r.customers?.name || 'Unknown'} — ${r.item_name}</div>
+            <div style="color:var(--text-dim); font-size:0.85rem;">${r.customers?.phone || 'No phone'} · ${due.toLocaleDateString()}</div>
+          </div>
+          <span class="status-pill ${isDue ? 'status-caution' : 'status-ok'} mono">${isDue ? 'Due' : 'Upcoming'}</span>
+        </div>
+        <button class="btn-text reminder-send" data-id="${r.id}" data-name="${(r.customers?.name || '').replace(/"/g,'&quot;')}" data-phone="${r.customers?.phone || ''}" data-item="${r.item_name.replace(/"/g,'&quot;')}" style="font-size:0.78rem; border:1px solid var(--border); border-radius:6px; padding:5px 10px;" ${!r.customers?.phone ? 'disabled' : ''}>📱 Send SMS now</button>`;
+      list.appendChild(row);
+    });
+    document.getElementById('reminderEmpty').style.display = (reminders || []).length === 0 ? 'block' : 'none';
+  }
+
+  document.getElementById('reminderList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.reminder-send');
+    if (!btn) return;
+    if (!btn.dataset.phone) return;
+
+    const message = `Hello ${btn.dataset.name}, this is a reminder from ${document.getElementById('pharmacyName').textContent} that your ${btn.dataset.item} refill may be due. Please contact us if you need a refill.`;
+    if (!confirm(`Send this real SMS now?\n\nTo: ${btn.dataset.phone}\n\n"${message}"`)) return;
+
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { reminder_id: btn.dataset.id, phone: btn.dataset.phone, message }
+    });
+
+    if (error || !data?.success) {
+      alert('Could not send: ' + (data?.error || error?.message || 'Unknown error'));
+      btn.disabled = false; btn.textContent = '📱 Send SMS now';
+      return;
+    }
+
+    alert('Sent!');
+    await loadReminders();
+  });
+
   document.getElementById('customerList').addEventListener('click', async (e) => {
     const editBtn = e.target.closest('.customer-edit');
     const deleteBtn = e.target.closest('.customer-delete');
@@ -2468,6 +2594,10 @@
 
     document.getElementById('exportData').style.display = isGrowth ? 'inline-block' : 'none';
     document.getElementById('exportStatus').textContent = isGrowth ? '' : 'Data export is a Growth feature — see Billing below to upgrade.';
+
+    document.getElementById('remindersLock').style.display = isGrowth ? 'none' : 'inline-block';
+    document.getElementById('remindersUpgradeNotice').style.display = isGrowth ? 'none' : 'block';
+    document.getElementById('openReminder').style.display = isGrowth ? 'inline-block' : 'none';
   }
 
   async function loadSuppliers(){
