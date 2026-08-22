@@ -95,6 +95,12 @@
   .panel{display:none;}
   .panel.active{display:block;}
 </style>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+  }
+</script>
 </head>
 <body>
 
@@ -220,25 +226,11 @@
     </div>
 
     <!-- VERIFY EMAIL -->
-    <div class="panel" id="panelVerify">
-      <h1>Check your email</h1>
-      <p class="subtitle" id="verifySubtitle">We sent a 6-digit code to your email. Enter it below to activate your account.</p>
-      <form id="formVerify">
-        <label for="verifyCode">Verification code</label>
-        <input type="text" id="verifyCode" required inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="123456" autocomplete="one-time-code">
-        <button class="btn" type="submit" id="verifyBtn">Verify & continue</button>
-      </form>
-      <div class="msg" id="verifyMsg"></div>
-      <p class="subtitle" style="margin-top:16px; margin-bottom:0;">
-        Didn't get it? <a href="#" id="resendCode" style="color:var(--brand); font-weight:600;">Resend code</a>
-      </p>
-    </div>
   </div>
 </main>
 
 <script>
   // ---------- Theme ----------
-  let pendingEmail = null; // email awaiting a verification code, shared by signup + login flows
   const root = document.documentElement;
   const themeToggle = document.getElementById('themeToggle');
   const iconSun = document.getElementById('iconSun');
@@ -260,11 +252,10 @@
   const tabSignup = document.getElementById('tabSignup');
   const panelLogin = document.getElementById('panelLogin');
   const panelSignup = document.getElementById('panelSignup');
-  const panelVerify = document.getElementById('panelVerify');
   const panelForgot = document.getElementById('panelForgot');
   const panelNewPassword = document.getElementById('panelNewPassword');
   const tabsBar = document.querySelector('.tabs');
-  const allPanels = [panelLogin, panelSignup, panelVerify, panelForgot, panelNewPassword];
+  const allPanels = [panelLogin, panelSignup, panelForgot, panelNewPassword];
 
   function showPanel(target){
     allPanels.forEach(p => p.classList.remove('active'));
@@ -375,10 +366,7 @@
 
     if (error) {
       if (error.message.toLowerCase().includes('email not confirmed')) {
-        showMsg(msg, "Your email isn't verified yet. Enter the code we sent you.", 'error');
-        pendingEmail = email;
-        document.getElementById('verifySubtitle').textContent = "Enter the 6-digit code we sent to " + email + ".";
-        showPanel(panelVerify);
+        showMsg(msg, "This account still needs email confirmation from an older signup — contact support to get it cleared.", 'error');
       } else {
         showMsg(msg, error.message, 'error');
       }
@@ -511,51 +499,25 @@
       // "Confirm email" is off — this account is already logged in.
       // dashboard.html's init() creates the pharmacy record itself,
       // since this is the first point a real, confirmed session exists.
+      // Fire-and-forget — a slow or failed welcome email should never
+      // hold up getting someone into their new dashboard.
+      supabase.functions.invoke('send-welcome-email', {
+        body: { email, display_name: displayName }
+      }).catch(() => {});
+
       showMsg(msg, signupMode === 'create' ? "You're in! Setting up " + pharmacyName + "…" : "You're in! Joining your team…", 'success');
       window.location.href = 'dashboard.html';
       return;
     }
 
-    // "Confirm email" is still on for this project — fall back to
-    // asking for the link/code, same as before.
-    pendingEmail = email;
-    document.getElementById('verifySubtitle').textContent = "We sent something to " + email + " — either a link to tap, or a 6-digit code to enter below, depending on your email setup.";
-    showPanel(panelVerify);
+    // With "Confirm email" off, a session should always come back
+    // immediately — landing here means that setting is still on in
+    // Supabase (Authentication → Sign In / Providers → Email) and
+    // needs to be turned off for signup to work as intended.
+    showMsg(msg, "Account created, but couldn't log you in automatically — this usually means email confirmation is still turned on in the project settings. Contact support.", 'error');
     btn.disabled = false; btn.textContent = 'Create account';
   });
 
-  // ---------- Verify email code ----------
-  document.getElementById('formVerify').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('verifyBtn');
-    const msg = document.getElementById('verifyMsg');
-    const code = document.getElementById('verifyCode').value.trim();
-
-    if (!pendingEmail) {
-      showMsg(msg, "We lost track of your email — please log in, and we'll send a fresh code if needed.", 'error');
-      return;
-    }
-
-    btn.disabled = true; btn.textContent = 'Verifying…';
-    const { error } = await supabase.auth.verifyOtp({ email: pendingEmail, token: code, type: 'signup' });
-
-    if (error) {
-      showMsg(msg, error.message, 'error');
-      btn.disabled = false; btn.textContent = 'Verify & continue';
-      return;
-    }
-
-    showMsg(msg, 'Verified! Setting up your pharmacy…', 'success');
-    window.location.href = 'dashboard.html';
-  });
-
-  document.getElementById('resendCode').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById('verifyMsg');
-    if (!pendingEmail) { showMsg(msg, 'Enter your email on the Log in tab first.', 'error'); return; }
-    const { error } = await supabase.auth.resend({ type: 'signup', email: pendingEmail });
-    showMsg(msg, error ? error.message : 'A new code is on its way.', error ? 'error' : 'success');
-  });
   }); // end DOMContentLoaded
 </script>
 
